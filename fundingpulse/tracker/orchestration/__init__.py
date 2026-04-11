@@ -1,12 +1,12 @@
 """Orchestration layer for funding tracker.
 
-This module provides high-level orchestrators that combine coordinator operations
-into simple functions for the scheduler.
+Provides ExchangeOrchestrator — the complete workflow for exchange data
+collection: contract registration, historical data sync/update, and live
+rate collection.
 
-The orchestration layer sits between the scheduler and coordinators:
+The orchestration layer sits between the scheduler and exchange adapters:
 - Scheduler calls simple methods: update(), update_live()
-- Orchestrators combine coordinators for complete workflows
-- Coordinators remain single-responsibility and testable
+- Orchestrator handles all workflow logic internally
 
 Example:
     orchestrator = ExchangeOrchestrator(...)
