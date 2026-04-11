@@ -1,14 +1,17 @@
-"""Exchange orchestrator."""
+"""Exchange orchestrator — coordinates data collection for a single exchange."""
 
 import asyncio
 import logging
-from datetime import datetime
+from collections.abc import Sequence
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 
+from fundingpulse.models.asset import Asset
 from fundingpulse.models.contract import Contract
-from fundingpulse.tracker.coordinators.contract_registry import register_contracts
-from fundingpulse.tracker.coordinators.history_fetcher import sync_contract, update_contract
-from fundingpulse.tracker.coordinators.live_collector import collect_live
+from fundingpulse.models.historical_funding_point import HistoricalFundingPoint
+from fundingpulse.models.live_funding_point import LiveFundingPoint
+from fundingpulse.models.quote import Quote
+from fundingpulse.models.section import Section
 from fundingpulse.tracker.db import UOWFactoryType
 from fundingpulse.tracker.materialized_view_refresher import MaterializedViewRefresher
 
@@ -17,9 +20,17 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Log progress every N batches during sync operations
+PROGRESS_LOG_BATCH_INTERVAL = 10
+
 
 class ExchangeOrchestrator:
-    """Coordinates update() and update_live() operations for scheduler."""
+    """Coordinates data collection for a single exchange.
+
+    Provides two entry points:
+    - update() — register contracts, then sync/update historical funding data
+    - update_live() — collect current unsettled funding rates
+    """
 
     def __init__(
         self,
@@ -35,18 +46,17 @@ class ExchangeOrchestrator:
         self._mv_refresher = mv_refresher
         self._semaphore = semaphore
 
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
     async def update(self) -> None:
         """Register contracts, then sync/update history for each."""
         start_time = datetime.now()
         logger.info(f"Starting update for {self._section_name}")
 
         try:
-            await register_contracts(
-                self._exchange_adapter,
-                self._section_name,
-                self._uow_factory,
-                self._mv_refresher,
-            )
+            await self._register_contracts()
         except Exception as e:
             logger.error(
                 f"Failed to register contracts for {self._section_name}: {e}",
@@ -67,62 +77,323 @@ class ExchangeOrchestrator:
             return
 
         logger.debug(f"Processing {len(contracts)} contracts for {self._section_name}")
+        results = await self._process_all_contracts(contracts)
+        self._log_update_stats(contracts, results, start_time)
 
-        # Track statistics
-        updated_count = 0
-        total_points = 0
+    async def update_live(self) -> None:
+        """Collect live funding rates for all active contracts."""
+        logger.debug(f"Collecting live rates for {self._section_name}")
 
-        async def process_contract(contract: Contract) -> tuple[int, int]:
-            """Process contract with timeout protection."""
-            async with self._semaphore:
-                try:
-                    if not contract.synced:
-                        async with asyncio.timeout(600.0):  # 10 minutes for sync
-                            points = await sync_contract(
-                                self._exchange_adapter,
-                                contract,
-                                self._uow_factory,
-                            )
-                    else:
-                        async with asyncio.timeout(60.0):  # 1 minute for update
-                            points = await update_contract(
-                                self._exchange_adapter,
-                                contract,
-                                self._uow_factory,
-                            )
-                    return (1 if points > 0 else 0, points)
-                except TimeoutError:
-                    contract_id = f"{contract.asset.name}/{contract.quote_name}"
-                    timeout_duration = "10m" if not contract.synced else "1m"
-                    logger.warning(
-                        f"[{self._section_name}] {contract_id} timed out after {timeout_duration}"
-                        f" - operation: {'sync' if not contract.synced else 'update'}"
-                    )
-                    return (0, 0)
-                except Exception as e:
-                    logger.error(
-                        f"Failed to process contract {contract.asset.name}/{contract.quote_name} "
-                        f"on {self._section_name}: {e}",
-                        exc_info=True,
-                    )
-                    return (0, 0)
+        try:
+            async with self._uow_factory() as uow:
+                contracts = await uow.contracts.get_active_by_section(self._section_name)
 
+            if not contracts:
+                logger.warning(f"[{self._section_name}] No active contracts for live collection")
+                return
+
+            logger.debug(
+                f"[{self._section_name}] Collecting live rates for {len(contracts)} contracts"
+            )
+
+            rates_by_contract = await self._exchange_adapter.fetch_live(list(contracts))
+
+            if not rates_by_contract:
+                logger.warning(f"[{self._section_name}] No live rates collected")
+                return
+
+            live_records = [
+                LiveFundingPoint(
+                    contract_id=contract.id,
+                    timestamp=rate.timestamp,
+                    funding_rate=rate.rate,
+                )
+                for contract, rate in rates_by_contract.items()
+            ]
+
+            async with self._uow_factory() as uow:
+                await uow.live_funding_records.bulk_insert_ignore(live_records)
+
+            success_count = len(live_records)
+            failure_count = len(contracts) - success_count
+
+            if failure_count > 0:
+                logger.info(
+                    f"[{self._section_name}] Live rate collection: "
+                    f"{success_count} success, {failure_count} failed"
+                )
+            else:
+                logger.debug(
+                    f"[{self._section_name}] Live rate collection: "
+                    f"all {success_count} rates collected successfully"
+                )
+        except Exception as e:
+            logger.error(
+                f"Failed to collect live rates for {self._section_name}: {e}",
+                exc_info=True,
+            )
+
+    # ------------------------------------------------------------------
+    # Private: contract registration
+    # ------------------------------------------------------------------
+
+    async def _register_contracts(self) -> None:
+        """Sync contract list from exchange API to database.
+
+        Marks contracts missing from API as deprecated, upserts active ones,
+        and signals the materialized view refresher on changes.
+        """
+        logger.debug(f"[{self._section_name}] Starting contract sync")
+
+        api_contracts = await self._exchange_adapter.get_contracts()
+        logger.debug(f"[{self._section_name}] Fetched {len(api_contracts)} contracts from API")
+
+        if not api_contracts:
+            logger.warning(f"[{self._section_name}] No contracts returned from API")
+            return
+
+        async with self._uow_factory() as uow:
+            section = Section(name=self._section_name)
+            await uow.sections.bulk_insert_ignore([section])
+
+            quotes = {Quote(name=contract.quote) for contract in api_contracts}
+            await uow.quotes.bulk_insert_ignore(quotes)
+            logger.debug(f"[{self._section_name}] Inserted {len(quotes)} unique quotes")
+
+            assets = {Asset(name=contract.asset_name) for contract in api_contracts}
+            await uow.assets.bulk_insert_ignore(assets)
+            logger.debug(f"[{self._section_name}] Inserted {len(assets)} unique assets")
+
+            existing_contracts = await uow.contracts.get_by_section(self._section_name)
+            logger.debug(
+                f"[{self._section_name}] Found {len(existing_contracts)} existing contracts in DB"
+            )
+
+            api_contract_keys = {(c.asset_name, c.quote) for c in api_contracts}
+
+            deprecated_count = 0
+            for contract in existing_contracts:
+                if (contract.asset_name, contract.quote_name) not in api_contract_keys:
+                    contract.deprecated = True
+                    deprecated_count += 1
+
+            if deprecated_count > 0:
+                logger.debug(
+                    f"[{self._section_name}] Marked {deprecated_count} contracts as deprecated"
+                )
+
+            contracts_to_upsert = [
+                Contract(
+                    asset_name=c.asset_name,
+                    quote_name=c.quote,
+                    section_name=self._section_name,
+                    funding_interval=c.funding_interval,
+                    deprecated=False,
+                )
+                for c in api_contracts
+            ]
+
+            await uow.contracts.upsert_many(contracts_to_upsert)
+            await uow.commit()
+
+            logger.info(
+                f"[{self._section_name}] Contract sync completed: "
+                f"{len(api_contracts)} active, {deprecated_count} deprecated"
+            )
+
+        await self._mv_refresher.signal_contracts_changed(self._section_name)
+        logger.debug(f"[{self._section_name}] Signaled MV refresher")
+
+    # ------------------------------------------------------------------
+    # Private: history processing
+    # ------------------------------------------------------------------
+
+    async def _process_all_contracts(self, contracts: Sequence[Contract]) -> list[tuple[int, int]]:
+        """Process all contracts concurrently with semaphore control."""
         logger.debug(f"[{self._section_name}] Starting gather for {len(contracts)} contracts")
-        tasks = [process_contract(contract) for contract in contracts]
+        tasks = [self._process_contract(contract) for contract in contracts]
         results = await asyncio.gather(*tasks)
+        logger.debug(f"[{self._section_name}] Gather complete")
+        return list(results)
 
-        logger.debug(f"[{self._section_name}] Gather complete, aggregating results...")
+    async def _process_contract(self, contract: Contract) -> tuple[int, int]:
+        """Process a single contract with timeout and error isolation.
 
-        # Aggregate statistics
-        for was_updated, points in results:
-            updated_count += was_updated
-            total_points += points
+        Returns:
+            (was_updated, points): 1/0 flag and number of new data points.
+        """
+        async with self._semaphore:
+            try:
+                if not contract.synced:
+                    async with asyncio.timeout(600.0):
+                        points = await self._sync_contract(contract)
+                else:
+                    async with asyncio.timeout(60.0):
+                        points = await self._update_contract(contract)
+                return (1 if points > 0 else 0, points)
+            except TimeoutError:
+                contract_id = f"{contract.asset.name}/{contract.quote_name}"
+                timeout_duration = "10m" if not contract.synced else "1m"
+                logger.warning(
+                    f"[{self._section_name}] {contract_id} timed out after "
+                    f"{timeout_duration} — operation: "
+                    f"{'sync' if not contract.synced else 'update'}"
+                )
+                return (0, 0)
+            except Exception as e:
+                logger.error(
+                    f"[{self._section_name}] Failed to process contract "
+                    f"{contract.asset.name}/{contract.quote_name}: {e}",
+                    exc_info=True,
+                )
+                return (0, 0)
+
+    async def _sync_contract(self, contract: Contract) -> int:
+        """Fetch full history backwards until no more data; mark contract as synced.
+
+        Opens/closes sessions per DB operation to avoid holding connections
+        during long API calls.
+        """
+        if contract.synced:
+            logger.debug(
+                f"[{self._section_name}] {contract.asset.name}/{contract.quote_name} "
+                f"already synced, skipping"
+            )
+            return 0
 
         logger.debug(
-            f"[{self._section_name}] Aggregation complete: "
-            f"{updated_count}/{len(contracts)} updated"
+            f"[{self._section_name}] Starting sync for {contract.asset.name}/{contract.quote_name}"
         )
 
+        total_points = 0
+        batch_count = 0
+
+        while True:
+            batch_count += 1
+
+            async with self._uow_factory() as uow:
+                oldest = await uow.historical_funding_records.get_oldest_for_contract(contract.id)
+                before_timestamp = oldest.timestamp - timedelta(seconds=1) if oldest else None
+
+            logger.debug(
+                f"[{self._section_name}] Sync batch #{batch_count}: "
+                f"{contract.asset.name}/{contract.quote_name} — "
+                f"fetching before {before_timestamp or 'beginning'}"
+            )
+
+            points = await self._exchange_adapter.fetch_history_before(contract, before_timestamp)
+
+            if not points:
+                async with self._uow_factory() as uow:
+                    merged_contract = await uow.merge(contract)
+                    merged_contract.synced = True
+                    await uow.commit()
+                logger.info(
+                    f"[{self._section_name}] No more history for "
+                    f"{contract.asset.name}/{contract.quote_name}, marking as synced "
+                    f"(total batches: {batch_count}, total points: {total_points})"
+                )
+                break
+
+            funding_records = [
+                HistoricalFundingPoint(
+                    contract_id=contract.id,
+                    timestamp=point.timestamp,
+                    funding_rate=point.rate,
+                )
+                for point in points
+            ]
+
+            async with self._uow_factory() as uow:
+                await uow.historical_funding_records.bulk_insert_ignore(funding_records)
+                await uow.commit()
+
+            batch_points = len(points)
+            total_points += batch_points
+
+            logger.debug(
+                f"[{self._section_name}] Sync batch #{batch_count}: "
+                f"{contract.asset.name}/{contract.quote_name} — "
+                f"{batch_points} points (oldest: {min(p.timestamp for p in points)}, "
+                f"newest: {max(p.timestamp for p in points)})"
+            )
+
+            if batch_count % PROGRESS_LOG_BATCH_INTERVAL == 0:
+                logger.info(
+                    f"[{self._section_name}] Sync progress for "
+                    f"{contract.asset.name}/{contract.quote_name}: "
+                    f"batch #{batch_count}, {total_points} total points fetched, "
+                    f"latest batch range: {min(p.timestamp for p in points)} to "
+                    f"{max(p.timestamp for p in points)}"
+                )
+
+        return total_points
+
+    async def _update_contract(self, contract: Contract) -> int:
+        """Fetch new data after latest point; skip if funding interval not elapsed.
+
+        NOTE: Holds DB session open during API call. Intentionally not fixed
+        in this refactor — see _sync_contract for the correct pattern.
+        """
+        logger.debug(
+            f"[{self._section_name}] Checking update for "
+            f"{contract.asset.name}/{contract.quote_name}"
+        )
+
+        async with self._uow_factory() as uow:
+            newest = await uow.historical_funding_records.get_newest_for_contract(contract.id)
+            after_timestamp = newest.timestamp + timedelta(seconds=1) if newest else None
+
+            if after_timestamp is None:
+                logger.warning(
+                    f"[{self._section_name}] No historical data for "
+                    f"{contract.asset.name}/{contract.quote_name}, run sync first"
+                )
+                return 0
+
+            now = datetime.now()
+            time_since_last = now - after_timestamp
+            required_interval = timedelta(hours=contract.funding_interval)
+
+            if time_since_last < required_interval:
+                logger.debug(
+                    f"[{self._section_name}] Skipping update for "
+                    f"{contract.asset.name}/{contract.quote_name}, "
+                    f"only {time_since_last} passed (need {required_interval})"
+                )
+                return 0
+
+            points = await self._exchange_adapter.fetch_history_after(contract, after_timestamp)
+
+            if not points:
+                return 0
+
+            funding_records = [
+                HistoricalFundingPoint(
+                    contract_id=contract.id,
+                    timestamp=point.timestamp,
+                    funding_rate=point.rate,
+                )
+                for point in points
+            ]
+
+            await uow.historical_funding_records.bulk_insert_ignore(funding_records)
+
+            return len(points)
+
+    # ------------------------------------------------------------------
+    # Private: helpers
+    # ------------------------------------------------------------------
+
+    def _log_update_stats(
+        self,
+        contracts: Sequence[Contract],
+        results: list[tuple[int, int]],
+        start_time: datetime,
+    ) -> None:
+        """Aggregate and log statistics from contract processing."""
+        updated_count = sum(r[0] for r in results)
+        total_points = sum(r[1] for r in results)
         duration = datetime.now() - start_time
         logger.info(
             f"History update for {self._section_name}: "
@@ -130,19 +401,3 @@ class ExchangeOrchestrator:
             f"{len(contracts) - updated_count} unchanged, "
             f"completed in {duration}"
         )
-
-    async def update_live(self) -> None:
-        """Collect live funding rates for all active contracts."""
-        logger.debug(f"Collecting live rates for {self._section_name}")
-
-        try:
-            await collect_live(
-                self._exchange_adapter,
-                self._section_name,
-                self._uow_factory,
-            )
-        except Exception as e:
-            logger.error(
-                f"Failed to collect live rates for {self._section_name}: {e}",
-                exc_info=True,
-            )
