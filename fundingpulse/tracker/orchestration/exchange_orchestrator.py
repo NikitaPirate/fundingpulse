@@ -39,13 +39,13 @@ class ExchangeOrchestrator:
         self,
         exchange_adapter: BaseExchange,
         section_name: str,
-        session_factory: SessionFactory,
+        db: SessionFactory,
         semaphore: asyncio.Semaphore,
         mv_refresher: MaterializedViewRefresher,
     ) -> None:
         self._exchange_adapter = exchange_adapter
         self._section_name = section_name
-        self._session_factory = session_factory
+        self._db = db
         self._mv_refresher = mv_refresher
         self._semaphore = semaphore
 
@@ -67,7 +67,7 @@ class ExchangeOrchestrator:
             )
             return
 
-        async with self._session_factory() as session:
+        async with self._db.begin() as session:
             contracts = await get_active_by_section(session, self._section_name)
 
         if not contracts:
@@ -88,7 +88,7 @@ class ExchangeOrchestrator:
         logger.debug(f"Collecting live rates for {self._section_name}")
 
         try:
-            async with self._session_factory() as session:
+            async with self._db.begin() as session:
                 contracts = await get_active_by_section(session, self._section_name)
 
             if not contracts:
@@ -114,7 +114,7 @@ class ExchangeOrchestrator:
                 for contract, rate in rates_by_contract.items()
             ]
 
-            async with self._session_factory.begin() as session:
+            async with self._db.begin() as session:
                 await bulk_insert(session, LiveFundingPoint, live_records, on_conflict="ignore")
 
             success_count = len(live_records)
@@ -155,7 +155,7 @@ class ExchangeOrchestrator:
             logger.warning(f"[{self._section_name}] No contracts returned from API")
             return
 
-        async with self._session_factory.begin() as session:
+        async with self._db.begin() as session:
             await bulk_insert(
                 session, Section, [Section(name=self._section_name)], on_conflict="ignore"
             )
@@ -274,7 +274,7 @@ class ExchangeOrchestrator:
         while True:
             batch_count += 1
 
-            async with self._session_factory() as session:
+            async with self._db.begin() as session:
                 oldest = await get_oldest_for_contract(session, contract.id)
                 before_timestamp = oldest.timestamp - timedelta(seconds=1) if oldest else None
 
@@ -287,7 +287,7 @@ class ExchangeOrchestrator:
             points = await self._exchange_adapter.fetch_history_before(contract, before_timestamp)
 
             if not points:
-                async with self._session_factory.begin() as session:
+                async with self._db.begin() as session:
                     merged_contract = await session.merge(contract)
                     merged_contract.synced = True
                 logger.info(
@@ -306,7 +306,7 @@ class ExchangeOrchestrator:
                 for point in points
             ]
 
-            async with self._session_factory.begin() as session:
+            async with self._db.begin() as session:
                 await bulk_insert(
                     session, HistoricalFundingPoint, funding_records, on_conflict="ignore"
                 )
@@ -343,7 +343,7 @@ class ExchangeOrchestrator:
             f"{contract.asset.name}/{contract.quote_name}"
         )
 
-        async with self._session_factory.begin() as session:
+        async with self._db.begin() as session:
             newest = await get_newest_for_contract(session, contract.id)
             after_timestamp = newest.timestamp + timedelta(seconds=1) if newest else None
 

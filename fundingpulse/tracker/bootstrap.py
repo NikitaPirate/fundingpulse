@@ -35,7 +35,7 @@ async def bootstrap(
         engine_kwargs=db_engine_kwargs,
     )
     mv_refresher = MaterializedViewRefresher(
-        session_factory=session_factory,
+        db=session_factory,
         debounce_seconds=mv_refresher_debounce,
     )
     scheduler = _create_scheduler()
@@ -113,7 +113,7 @@ def _register_exchange_jobs(
         orchestrator = ExchangeOrchestrator(
             exchange_adapter=EXCHANGES[exchange_name],
             section_name=exchange_name,
-            session_factory=session_factory,
+            db=session_factory,
             semaphore=asyncio.Semaphore(concurrency_limit),
             mv_refresher=mv_refresher,
         )

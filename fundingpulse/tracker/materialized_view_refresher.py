@@ -11,8 +11,8 @@ from fundingpulse.tracker.db import SessionFactory
 class MaterializedViewRefresher:
     """Debounced refresh for materialized views."""
 
-    def __init__(self, session_factory: SessionFactory, debounce_seconds: int = 10) -> None:
-        self._session_factory = session_factory
+    def __init__(self, db: SessionFactory, debounce_seconds: int = 10) -> None:
+        self._db = db
         self._debounce_seconds = debounce_seconds
         self._last_signal_time: float | None = None
         self._pending_refresh = False
@@ -47,7 +47,7 @@ class MaterializedViewRefresher:
             self._logger.debug(f"Waiting {remaining_time:.1f}s more before refresh")
 
     async def _refresh_materialized_views(self) -> None:
-        async with self._session_factory.begin() as session:
+        async with self._db.begin() as session:
             self._logger.debug("Starting materialized views refresh")
             await session.execute(
                 text("REFRESH MATERIALIZED VIEW CONCURRENTLY contract_enriched;")
