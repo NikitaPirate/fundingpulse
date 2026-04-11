@@ -12,7 +12,10 @@ from fundingpulse.models.historical_funding_point import HistoricalFundingPoint
 from fundingpulse.models.live_funding_point import LiveFundingPoint
 from fundingpulse.models.quote import Quote
 from fundingpulse.models.section import Section
-from fundingpulse.tracker.db import UOWFactoryType
+from fundingpulse.tracker.db import SessionFactory
+from fundingpulse.tracker.db.contracts import get_active_by_section, get_by_section, upsert_many
+from fundingpulse.tracker.db.funding_points import get_newest_for_contract, get_oldest_for_contract
+from fundingpulse.tracker.db.utils import bulk_insert
 from fundingpulse.tracker.materialized_view_refresher import MaterializedViewRefresher
 
 if TYPE_CHECKING:
@@ -36,13 +39,13 @@ class ExchangeOrchestrator:
         self,
         exchange_adapter: BaseExchange,
         section_name: str,
-        uow_factory: UOWFactoryType,
+        db: SessionFactory,
         semaphore: asyncio.Semaphore,
         mv_refresher: MaterializedViewRefresher,
     ) -> None:
         self._exchange_adapter = exchange_adapter
         self._section_name = section_name
-        self._uow_factory = uow_factory
+        self._db = db
         self._mv_refresher = mv_refresher
         self._semaphore = semaphore
 
@@ -64,8 +67,8 @@ class ExchangeOrchestrator:
             )
             return
 
-        async with self._uow_factory() as uow:
-            contracts = await uow.contracts.get_active_by_section(self._section_name)
+        async with self._db.begin() as session:
+            contracts = await get_active_by_section(session, self._section_name)
 
         if not contracts:
             logger.warning(f"No contracts found for {self._section_name}")
@@ -85,8 +88,8 @@ class ExchangeOrchestrator:
         logger.debug(f"Collecting live rates for {self._section_name}")
 
         try:
-            async with self._uow_factory() as uow:
-                contracts = await uow.contracts.get_active_by_section(self._section_name)
+            async with self._db.begin() as session:
+                contracts = await get_active_by_section(session, self._section_name)
 
             if not contracts:
                 logger.warning(f"[{self._section_name}] No active contracts for live collection")
@@ -111,8 +114,8 @@ class ExchangeOrchestrator:
                 for contract, rate in rates_by_contract.items()
             ]
 
-            async with self._uow_factory() as uow:
-                await uow.live_funding_records.bulk_insert_ignore(live_records)
+            async with self._db.begin() as session:
+                await bulk_insert(session, LiveFundingPoint, live_records, on_conflict="ignore")
 
             success_count = len(live_records)
             failure_count = len(contracts) - success_count
@@ -152,19 +155,20 @@ class ExchangeOrchestrator:
             logger.warning(f"[{self._section_name}] No contracts returned from API")
             return
 
-        async with self._uow_factory() as uow:
-            section = Section(name=self._section_name)
-            await uow.sections.bulk_insert_ignore([section])
+        async with self._db.begin() as session:
+            await bulk_insert(
+                session, Section, [Section(name=self._section_name)], on_conflict="ignore"
+            )
 
             quotes = {Quote(name=contract.quote) for contract in api_contracts}
-            await uow.quotes.bulk_insert_ignore(quotes)
+            await bulk_insert(session, Quote, quotes, on_conflict="ignore")
             logger.debug(f"[{self._section_name}] Inserted {len(quotes)} unique quotes")
 
             assets = {Asset(name=contract.asset_name) for contract in api_contracts}
-            await uow.assets.bulk_insert_ignore(assets)
+            await bulk_insert(session, Asset, assets, on_conflict="ignore")
             logger.debug(f"[{self._section_name}] Inserted {len(assets)} unique assets")
 
-            existing_contracts = await uow.contracts.get_by_section(self._section_name)
+            existing_contracts = await get_by_section(session, self._section_name)
             logger.debug(
                 f"[{self._section_name}] Found {len(existing_contracts)} existing contracts in DB"
             )
@@ -193,8 +197,7 @@ class ExchangeOrchestrator:
                 for c in api_contracts
             ]
 
-            await uow.contracts.upsert_many(contracts_to_upsert)
-            await uow.commit()
+            await upsert_many(session, contracts_to_upsert)
 
             logger.info(
                 f"[{self._section_name}] Contract sync completed: "
@@ -271,8 +274,8 @@ class ExchangeOrchestrator:
         while True:
             batch_count += 1
 
-            async with self._uow_factory() as uow:
-                oldest = await uow.historical_funding_records.get_oldest_for_contract(contract.id)
+            async with self._db.begin() as session:
+                oldest = await get_oldest_for_contract(session, contract.id)
                 before_timestamp = oldest.timestamp - timedelta(seconds=1) if oldest else None
 
             logger.debug(
@@ -284,10 +287,9 @@ class ExchangeOrchestrator:
             points = await self._exchange_adapter.fetch_history_before(contract, before_timestamp)
 
             if not points:
-                async with self._uow_factory() as uow:
-                    merged_contract = await uow.merge(contract)
+                async with self._db.begin() as session:
+                    merged_contract = await session.merge(contract)
                     merged_contract.synced = True
-                    await uow.commit()
                 logger.info(
                     f"[{self._section_name}] No more history for "
                     f"{contract.asset.name}/{contract.quote_name}, marking as synced "
@@ -304,9 +306,10 @@ class ExchangeOrchestrator:
                 for point in points
             ]
 
-            async with self._uow_factory() as uow:
-                await uow.historical_funding_records.bulk_insert_ignore(funding_records)
-                await uow.commit()
+            async with self._db.begin() as session:
+                await bulk_insert(
+                    session, HistoricalFundingPoint, funding_records, on_conflict="ignore"
+                )
 
             batch_points = len(points)
             total_points += batch_points
@@ -340,8 +343,8 @@ class ExchangeOrchestrator:
             f"{contract.asset.name}/{contract.quote_name}"
         )
 
-        async with self._uow_factory() as uow:
-            newest = await uow.historical_funding_records.get_newest_for_contract(contract.id)
+        async with self._db.begin() as session:
+            newest = await get_newest_for_contract(session, contract.id)
             after_timestamp = newest.timestamp + timedelta(seconds=1) if newest else None
 
             if after_timestamp is None:
@@ -377,7 +380,9 @@ class ExchangeOrchestrator:
                 for point in points
             ]
 
-            await uow.historical_funding_records.bulk_insert_ignore(funding_records)
+            await bulk_insert(
+                session, HistoricalFundingPoint, funding_records, on_conflict="ignore"
+            )
 
             return len(points)
 

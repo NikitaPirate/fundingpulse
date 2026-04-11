@@ -11,7 +11,7 @@ from apscheduler.triggers.combining import OrTrigger
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 
-from fundingpulse.tracker.db import UOWFactoryType, create_uow_factory
+from fundingpulse.tracker.db import SessionFactory, setup_db_session
 from fundingpulse.tracker.exchanges import EXCHANGES
 from fundingpulse.tracker.materialized_view_refresher import MaterializedViewRefresher
 from fundingpulse.tracker.orchestration import ExchangeOrchestrator
@@ -29,13 +29,13 @@ async def bootstrap(
 ) -> AsyncIOScheduler:
     """Build and return configured scheduler."""
     resolved_exchanges = _resolve_exchanges(exchanges)
-    uow_factory = _create_uow_factory(
-        db_connection=db_connection,
-        db_engine_kwargs=db_engine_kwargs,
-        db_session_kwargs=db_session_kwargs,
+    session_factory = setup_db_session(
+        db_connection,
+        session_kwargs=db_session_kwargs,
+        engine_kwargs=db_engine_kwargs,
     )
     mv_refresher = MaterializedViewRefresher(
-        uow_factory=uow_factory,
+        db=session_factory,
         debounce_seconds=mv_refresher_debounce,
     )
     scheduler = _create_scheduler()
@@ -43,7 +43,7 @@ async def bootstrap(
     _register_exchange_jobs(
         scheduler=scheduler,
         exchange_names=resolved_exchanges,
-        uow_factory=uow_factory,
+        session_factory=session_factory,
         mv_refresher=mv_refresher,
         concurrency_limit=concurrency_limit,
     )
@@ -84,19 +84,6 @@ def _resolve_exchanges(exchanges: list[str] | None) -> list[str]:
     return valid
 
 
-def _create_uow_factory(
-    db_connection: str,
-    db_engine_kwargs: dict[str, Any],
-    db_session_kwargs: dict[str, Any],
-) -> UOWFactoryType:
-    """Create shared database unit-of-work factory."""
-    return create_uow_factory(
-        db_connection,
-        session_kwargs=db_session_kwargs,
-        engine_kwargs=db_engine_kwargs,
-    )
-
-
 def _create_scheduler() -> AsyncIOScheduler:
     """Create scheduler with default behavior."""
     return AsyncIOScheduler(
@@ -111,7 +98,7 @@ def _create_scheduler() -> AsyncIOScheduler:
 def _register_exchange_jobs(
     scheduler: AsyncIOScheduler,
     exchange_names: list[str],
-    uow_factory: UOWFactoryType,
+    session_factory: SessionFactory,
     mv_refresher: MaterializedViewRefresher,
     concurrency_limit: int,
 ) -> None:
@@ -126,7 +113,7 @@ def _register_exchange_jobs(
         orchestrator = ExchangeOrchestrator(
             exchange_adapter=EXCHANGES[exchange_name],
             section_name=exchange_name,
-            uow_factory=uow_factory,
+            db=session_factory,
             semaphore=asyncio.Semaphore(concurrency_limit),
             mv_refresher=mv_refresher,
         )

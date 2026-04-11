@@ -3,15 +3,17 @@
 import logging
 import time
 
-from fundingpulse.tracker.db import UOWFactoryType
+from sqlalchemy import text
+
+from fundingpulse.tracker.db import SessionFactory
 
 
 class MaterializedViewRefresher:
     """Debounced refresh for materialized views."""
 
-    def __init__(self, uow_factory: UOWFactoryType, debounce_seconds: int = 10) -> None:
-        self.uow_factory = uow_factory
-        self.debounce_seconds = debounce_seconds
+    def __init__(self, db: SessionFactory, debounce_seconds: int = 10) -> None:
+        self._db = db
+        self._debounce_seconds = debounce_seconds
         self._last_signal_time: float | None = None
         self._pending_refresh = False
         self._logger = logging.getLogger(__name__)
@@ -28,7 +30,7 @@ class MaterializedViewRefresher:
 
         time_since_last_signal = time.time() - self._last_signal_time
 
-        if time_since_last_signal >= self.debounce_seconds:
+        if time_since_last_signal >= self._debounce_seconds:
             try:
                 await self._refresh_materialized_views()
                 self._pending_refresh = False
@@ -41,10 +43,12 @@ class MaterializedViewRefresher:
                     exc_info=True,
                 )
         else:
-            remaining_time = self.debounce_seconds - time_since_last_signal
+            remaining_time = self._debounce_seconds - time_since_last_signal
             self._logger.debug(f"Waiting {remaining_time:.1f}s more before refresh")
 
     async def _refresh_materialized_views(self) -> None:
-        async with self.uow_factory() as uow:
+        async with self._db.begin() as session:
             self._logger.debug("Starting materialized views refresh")
-            await uow.execute_raw("REFRESH MATERIALIZED VIEW CONCURRENTLY contract_enriched;")
+            await session.execute(
+                text("REFRESH MATERIALIZED VIEW CONCURRENTLY contract_enriched;")
+            )
