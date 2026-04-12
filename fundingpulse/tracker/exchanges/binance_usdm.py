@@ -5,6 +5,7 @@ Minimum interval is 1 hour.
 _FETCH_STEP = 1000 hours.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Any
@@ -29,8 +30,12 @@ class BinanceUsdmExchange(BaseExchange):
         return f"{contract.asset.name}{contract.quote_name}"
 
     async def get_contracts(self) -> list[ContractInfo]:
-        exchange_response: Any = await self._api_get(f"{self.API_ENDPOINT}/v1/exchangeInfo")
-        funding_response: Any = await self._api_get(f"{self.API_ENDPOINT}/v1/fundingInfo")
+        exchange_response: Any
+        funding_response: Any
+        exchange_response, funding_response = await asyncio.gather(
+            self._api_get(f"{self.API_ENDPOINT}/v1/exchangeInfo"),
+            self._api_get(f"{self.API_ENDPOINT}/v1/fundingInfo"),
+        )
 
         contracts = []
         funding_intervals = {
