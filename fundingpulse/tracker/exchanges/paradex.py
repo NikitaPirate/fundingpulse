@@ -31,6 +31,7 @@ _FETCH_STEP = 6 hours = 4320 records (5000 limit - safety buffer).
 - Timestamp: 15:00:00 (end of hour)
 """
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 
@@ -50,10 +51,12 @@ class ParadexExchange(BaseExchange):
     # 6 hours * 720 records/hour = 4320 records (safely under 5000 limit)
     _FETCH_STEP = 6
 
-    # Live cache: {contract_id: {hour_start_ms: [rates]}}
-    # Stores live funding records collected every minute for fetch_after optimization
-    # Cache entries are automatically removed via pop() when used in fetch_history_after
-    _live_cache: dict[str, dict[int, list[float]]] = {}
+    def __init__(self, semaphore: asyncio.Semaphore | None = None) -> None:
+        super().__init__(semaphore)
+        # Live cache: {contract_id: {hour_start_ms: [rates]}}
+        # Stores live funding records collected every minute for fetch_after optimization
+        # Cache entries are automatically removed via pop() when used in fetch_history_after
+        self._live_cache: dict[str, dict[int, list[float]]] = {}
 
     def _format_symbol(self, contract: Contract) -> str:
         return f"{contract.asset.name}-USD-PERP"
