@@ -5,6 +5,7 @@ Minimum interval is 1 hour.
 _FETCH_STEP = 1000 hours.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Any
@@ -12,7 +13,6 @@ from typing import Any
 from fundingpulse.models.contract import Contract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
-from fundingpulse.tracker.infrastructure import http_client
 
 logger = logging.getLogger(__name__)
 
@@ -30,8 +30,12 @@ class BinanceUsdmExchange(BaseExchange):
         return f"{contract.asset.name}{contract.quote_name}"
 
     async def get_contracts(self) -> list[ContractInfo]:
-        exchange_response: Any = await http_client.get(f"{self.API_ENDPOINT}/v1/exchangeInfo")
-        funding_response: Any = await http_client.get(f"{self.API_ENDPOINT}/v1/fundingInfo")
+        exchange_response: Any
+        funding_response: Any
+        exchange_response, funding_response = await asyncio.gather(
+            self._api_get(f"{self.API_ENDPOINT}/v1/exchangeInfo"),
+            self._api_get(f"{self.API_ENDPOINT}/v1/fundingInfo"),
+        )
 
         contracts = []
         funding_intervals = {
@@ -58,7 +62,7 @@ class BinanceUsdmExchange(BaseExchange):
     ) -> list[FundingPoint]:
         symbol = self._format_symbol(contract)
 
-        response: Any = await http_client.get(
+        response: Any = await self._api_get(
             f"{self.API_ENDPOINT}/v1/fundingRate",
             params={
                 "symbol": symbol,
@@ -78,7 +82,7 @@ class BinanceUsdmExchange(BaseExchange):
         return points
 
     async def _fetch_all_rates(self) -> dict[str, FundingPoint]:
-        response: Any = await http_client.get(f"{self.API_ENDPOINT}/v1/premiumIndex")
+        response: Any = await self._api_get(f"{self.API_ENDPOINT}/v1/premiumIndex")
 
         now = datetime.now()
         rates = {}

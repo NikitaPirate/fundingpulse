@@ -11,7 +11,6 @@ from datetime import datetime
 from fundingpulse.models.contract import Contract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
-from fundingpulse.tracker.infrastructure import http_client
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +32,7 @@ class DeriveExchange(BaseExchange):
         page = 1
 
         while True:
-            response = await http_client.post(
+            response = await self._api_post(
                 f"{self.API_ENDPOINT}/get_all_instruments",
                 json={
                     "currency": None,
@@ -79,7 +78,7 @@ class DeriveExchange(BaseExchange):
     ) -> list[FundingPoint]:
         symbol = self._format_symbol(contract)
 
-        response = await http_client.post(
+        response = await self._api_post(
             f"{self.API_ENDPOINT}/get_funding_rate_history",
             json={
                 "instrument_name": symbol,
@@ -102,7 +101,7 @@ class DeriveExchange(BaseExchange):
         return points
 
     async def _fetch_all_rates(self) -> dict[str, FundingPoint]:
-        response = await http_client.post(
+        response = await self._api_post(
             f"{self.API_ENDPOINT}/get_all_instruments",
             json={
                 "currency": None,

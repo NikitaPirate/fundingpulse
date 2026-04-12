@@ -4,6 +4,7 @@ Lighter uses 1-hour funding interval. API limit is 500 records per request.
 _FETCH_STEP = 498 hours (500 - 2 safety buffer).
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime
@@ -13,7 +14,6 @@ import websockets
 from fundingpulse.models.contract import Contract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
-from fundingpulse.tracker.infrastructure import http_client
 
 logger = logging.getLogger(__name__)
 
@@ -28,14 +28,15 @@ class LighterExchange(BaseExchange):
     # 500 records max, 1-hour interval -> 498 hours (500 - 2 safety buffer)
     _FETCH_STEP = 498
 
-    def __init__(self) -> None:
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
         self._asset_to_id: dict[str, int] = {}
 
     def _format_symbol(self, contract: Contract) -> str:
         return str(self._asset_to_id[contract.asset.name])
 
     async def get_contracts(self) -> list[ContractInfo]:
-        response = await http_client.get(f"{self.API_ENDPOINT}/orderBooks")
+        response = await self._api_get(f"{self.API_ENDPOINT}/orderBooks")
 
         assert isinstance(response, dict)
 
@@ -64,7 +65,7 @@ class LighterExchange(BaseExchange):
     ) -> list[FundingPoint]:
         symbol = self._format_symbol(contract)
 
-        response = await http_client.get(
+        response = await self._api_get(
             f"{self.API_ENDPOINT}/fundings",
             params={
                 "market_id": int(symbol),
@@ -90,26 +91,19 @@ class LighterExchange(BaseExchange):
         return points
 
     async def _fetch_all_rates(self) -> dict[str, FundingPoint]:
-        rates = {}
+        async with asyncio.timeout(30), websockets.connect(self.WS_ENDPOINT) as ws:
+            await ws.send(json.dumps({"type": "subscribe", "channel": "market_stats/all"}))
+            await ws.recv()  # skip "connected" ack
+            data = json.loads(await ws.recv())
 
-        async with websockets.connect(self.WS_ENDPOINT) as websocket:
-            await websocket.send(json.dumps({"type": "subscribe", "channel": "market_stats/all"}))
-
-            # Skip "connected" message, get first data message
-            await websocket.recv()
-            message = await websocket.recv()
-            data = json.loads(message)
-
-            market_stats = data.get("market_stats", {})
-            for market_id, payload in market_stats.items():
-                funding_rate = payload.get("current_funding_rate")
-                if funding_rate is not None:
-                    # WebSocket returns string keys, convert to int for consistency
-                    rates[market_id] = FundingPoint(
-                        rate=float(funding_rate) / 100, timestamp=datetime.now()
-                    )
-
-        return rates
+        now = datetime.now()
+        return {
+            market_id: FundingPoint(
+                rate=float(payload["current_funding_rate"]) / 100, timestamp=now
+            )
+            for market_id, payload in data.get("market_stats", {}).items()
+            if payload.get("current_funding_rate") is not None
+        }
 
     async def fetch_live(self, contracts: list[Contract]) -> dict[Contract, FundingPoint]:
         symbol_to_contract = {self._format_symbol(c): c for c in contracts}

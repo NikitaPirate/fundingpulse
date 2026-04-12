@@ -40,14 +40,12 @@ class ExchangeOrchestrator:
         exchange_adapter: BaseExchange,
         section_name: str,
         db: SessionFactory,
-        semaphore: asyncio.Semaphore,
         mv_refresher: MaterializedViewRefresher,
     ) -> None:
         self._exchange_adapter = exchange_adapter
         self._section_name = section_name
         self._db = db
         self._mv_refresher = mv_refresher
-        self._semaphore = semaphore
 
     # ------------------------------------------------------------------
     # Public API
@@ -204,7 +202,7 @@ class ExchangeOrchestrator:
                 f"{len(api_contracts)} active, {deprecated_count} deprecated"
             )
 
-        await self._mv_refresher.signal_contracts_changed(self._section_name)
+        self._mv_refresher.signal_contracts_changed(self._section_name)
         logger.debug(f"[{self._section_name}] Signaled MV refresher")
 
     # ------------------------------------------------------------------
@@ -212,12 +210,12 @@ class ExchangeOrchestrator:
     # ------------------------------------------------------------------
 
     async def _process_all_contracts(self, contracts: Sequence[Contract]) -> list[tuple[int, int]]:
-        """Process all contracts concurrently with semaphore control."""
+        """Process all contracts concurrently."""
         logger.debug(f"[{self._section_name}] Starting gather for {len(contracts)} contracts")
         tasks = [self._process_contract(contract) for contract in contracts]
-        results = await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
         logger.debug(f"[{self._section_name}] Gather complete")
-        return list(results)
+        return [r if not isinstance(r, BaseException) else (0, 0) for r in results]
 
     async def _process_contract(self, contract: Contract) -> tuple[int, int]:
         """Process a single contract with timeout and error isolation.
@@ -225,31 +223,30 @@ class ExchangeOrchestrator:
         Returns:
             (was_updated, points): 1/0 flag and number of new data points.
         """
-        async with self._semaphore:
-            try:
-                if not contract.synced:
-                    async with asyncio.timeout(600.0):
-                        points = await self._sync_contract(contract)
-                else:
-                    async with asyncio.timeout(60.0):
-                        points = await self._update_contract(contract)
-                return (1 if points > 0 else 0, points)
-            except TimeoutError:
-                contract_id = f"{contract.asset.name}/{contract.quote_name}"
-                timeout_duration = "10m" if not contract.synced else "1m"
-                logger.warning(
-                    f"[{self._section_name}] {contract_id} timed out after "
-                    f"{timeout_duration} — operation: "
-                    f"{'sync' if not contract.synced else 'update'}"
-                )
-                return (0, 0)
-            except Exception as e:
-                logger.error(
-                    f"[{self._section_name}] Failed to process contract "
-                    f"{contract.asset.name}/{contract.quote_name}: {e}",
-                    exc_info=True,
-                )
-                return (0, 0)
+        try:
+            if not contract.synced:
+                async with asyncio.timeout(600.0):
+                    points = await self._sync_contract(contract)
+            else:
+                async with asyncio.timeout(60.0):
+                    points = await self._update_contract(contract)
+            return (1 if points > 0 else 0, points)
+        except TimeoutError:
+            contract_id = f"{contract.asset.name}/{contract.quote_name}"
+            timeout_duration = "10m" if not contract.synced else "1m"
+            logger.warning(
+                f"[{self._section_name}] {contract_id} timed out after "
+                f"{timeout_duration} — operation: "
+                f"{'sync' if not contract.synced else 'update'}"
+            )
+            return (0, 0)
+        except Exception as e:
+            logger.error(
+                f"[{self._section_name}] Failed to process contract "
+                f"{contract.asset.name}/{contract.quote_name}: {e}",
+                exc_info=True,
+            )
+            return (0, 0)
 
     async def _sync_contract(self, contract: Contract) -> int:
         """Fetch full history backwards until no more data; mark contract as synced.
@@ -335,8 +332,8 @@ class ExchangeOrchestrator:
     async def _update_contract(self, contract: Contract) -> int:
         """Fetch new data after latest point; skip if funding interval not elapsed.
 
-        NOTE: Holds DB session open during API call. Intentionally not fixed
-        in this refactor — see _sync_contract for the correct pattern.
+        Opens/closes sessions per DB operation to avoid holding connections
+        during API calls (same pattern as _sync_contract).
         """
         logger.debug(
             f"[{self._section_name}] Checking update for "
@@ -345,46 +342,48 @@ class ExchangeOrchestrator:
 
         async with self._db.begin() as session:
             newest = await get_newest_for_contract(session, contract.id)
-            after_timestamp = newest.timestamp + timedelta(seconds=1) if newest else None
 
-            if after_timestamp is None:
-                logger.warning(
-                    f"[{self._section_name}] No historical data for "
-                    f"{contract.asset.name}/{contract.quote_name}, run sync first"
-                )
-                return 0
+        after_timestamp = newest.timestamp + timedelta(seconds=1) if newest else None
 
-            now = datetime.now()
-            time_since_last = now - after_timestamp
-            required_interval = timedelta(hours=contract.funding_interval)
+        if after_timestamp is None:
+            logger.warning(
+                f"[{self._section_name}] No historical data for "
+                f"{contract.asset.name}/{contract.quote_name}, run sync first"
+            )
+            return 0
 
-            if time_since_last < required_interval:
-                logger.debug(
-                    f"[{self._section_name}] Skipping update for "
-                    f"{contract.asset.name}/{contract.quote_name}, "
-                    f"only {time_since_last} passed (need {required_interval})"
-                )
-                return 0
+        now = datetime.now()
+        time_since_last = now - after_timestamp
+        required_interval = timedelta(hours=contract.funding_interval)
 
-            points = await self._exchange_adapter.fetch_history_after(contract, after_timestamp)
+        if time_since_last < required_interval:
+            logger.debug(
+                f"[{self._section_name}] Skipping update for "
+                f"{contract.asset.name}/{contract.quote_name}, "
+                f"only {time_since_last} passed (need {required_interval})"
+            )
+            return 0
 
-            if not points:
-                return 0
+        points = await self._exchange_adapter.fetch_history_after(contract, after_timestamp)
 
-            funding_records = [
-                HistoricalFundingPoint(
-                    contract_id=contract.id,
-                    timestamp=point.timestamp,
-                    funding_rate=point.rate,
-                )
-                for point in points
-            ]
+        if not points:
+            return 0
 
+        funding_records = [
+            HistoricalFundingPoint(
+                contract_id=contract.id,
+                timestamp=point.timestamp,
+                funding_rate=point.rate,
+            )
+            for point in points
+        ]
+
+        async with self._db.begin() as session:
             await bulk_insert(
                 session, HistoricalFundingPoint, funding_records, on_conflict="ignore"
             )
 
-            return len(points)
+        return len(points)
 
     # ------------------------------------------------------------------
     # Private: helpers

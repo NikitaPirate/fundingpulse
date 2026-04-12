@@ -12,7 +12,6 @@ from typing import Any
 from fundingpulse.models.contract import Contract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
-from fundingpulse.tracker.infrastructure import http_client
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ class PacificaExchange(BaseExchange):
         return contract.asset.name
 
     async def get_contracts(self) -> list[ContractInfo]:
-        response: Any = await http_client.get(f"{self.API_ENDPOINT}/info")
+        response: Any = await self._api_get(f"{self.API_ENDPOINT}/info")
 
         assert isinstance(response, dict)
 
@@ -68,7 +67,7 @@ class PacificaExchange(BaseExchange):
             if cursor:
                 params["cursor"] = cursor
 
-            response: Any = await http_client.get(
+            response: Any = await self._api_get(
                 f"{self.API_ENDPOINT}/funding_rate/history",
                 params=params,
             )
@@ -114,7 +113,7 @@ class PacificaExchange(BaseExchange):
         return points
 
     async def _fetch_all_rates(self) -> dict[str, FundingPoint]:
-        response: Any = await http_client.get(f"{self.API_ENDPOINT}/info/prices")
+        response: Any = await self._api_get(f"{self.API_ENDPOINT}/info/prices")
 
         assert isinstance(response, dict)
 

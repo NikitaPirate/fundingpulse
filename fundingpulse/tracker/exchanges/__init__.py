@@ -35,17 +35,16 @@ def _validate_exchange(exchange_class: type[BaseExchange], name: str) -> None:
     if not isinstance(exchange_class.EXCHANGE_ID, str):
         raise TypeError(f"{name}: EXCHANGE_ID must be str, got {type(exchange_class.EXCHANGE_ID)}")
 
-    # Note: fetch_live validation handled by @abstractmethod in BaseExchange
     required_methods = ["_format_symbol", "get_contracts", "_fetch_history"]
     for method_name in required_methods:
         if not hasattr(exchange_class, method_name):
             raise TypeError(f"{name}: missing required method {method_name}()")
 
-    logger.info(f"✓ {name}: implements fetch_live()")
+    logger.info(f"✓ {name}: validated")
 
 
-def _build_registry() -> dict[str, BaseExchange]:
-    """Build EXCHANGES registry with validation and instantiation."""
+def _build_registry() -> dict[str, type[BaseExchange]]:
+    """Build EXCHANGES registry with validation. Stores classes, not instances."""
     exchange_classes: dict[str, type[BaseExchange]] = {
         "aster": aster.AsterExchange,
         "backpack": backpack.BackpackExchange,
@@ -64,15 +63,13 @@ def _build_registry() -> dict[str, BaseExchange]:
         "paradex": paradex.ParadexExchange,
     }
 
-    registry = {}
     for name, cls in exchange_classes.items():
         _validate_exchange(cls, name)
-        registry[name] = cls()
 
-    logger.info(f"Exchange adapter registry initialized with {len(registry)} exchanges")
-    return registry
+    logger.info(f"Exchange registry validated: {len(exchange_classes)} exchanges")
+    return exchange_classes
 
 
-EXCHANGES: dict[str, BaseExchange] = _build_registry()
+EXCHANGES: dict[str, type[BaseExchange]] = _build_registry()
 
 __all__ = ["EXCHANGES", "BaseExchange"]

@@ -1,4 +1,4 @@
-"""HTTP client with exponential backoff retry."""
+"""HTTP client with exponential backoff retry and connection pooling."""
 
 import logging
 from typing import Any
@@ -25,6 +25,40 @@ RETRY_CONFIG = {
 }
 
 
+class _HttpClient:
+    """Module-level HTTP client container with connection pooling."""
+
+    def __init__(self) -> None:
+        self._client: httpx.AsyncClient | None = None
+
+    async def startup(self) -> None:
+        """Create shared httpx client. Call once at application startup."""
+        if self._client is not None:
+            raise RuntimeError("HTTP client already started")
+        self._client = httpx.AsyncClient(timeout=30.0)
+        logger.info("HTTP client started")
+
+    async def shutdown(self) -> None:
+        """Close shared httpx client. Safe to call if already closed."""
+        if self._client is None:
+            return
+        await self._client.aclose()
+        self._client = None
+        logger.info("HTTP client closed")
+
+    @property
+    def client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            raise RuntimeError("HTTP client not started — call startup() first")
+        return self._client
+
+
+_http = _HttpClient()
+
+startup = _http.startup
+shutdown = _http.shutdown
+
+
 @retry(**RETRY_CONFIG)
 async def get(
     url: str,
@@ -32,10 +66,9 @@ async def get(
     headers: dict[str, str] | None = None,
     timeout: float = 30.0,
 ) -> JsonValue:
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.get(url, params=params, headers=headers)
-        response.raise_for_status()
-        return response.json()
+    response = await _http.client.get(url, params=params, headers=headers, timeout=timeout)
+    response.raise_for_status()
+    return response.json()
 
 
 @retry(**RETRY_CONFIG)
@@ -45,7 +78,6 @@ async def post(
     headers: dict[str, str] | None = None,
     timeout: float = 30.0,
 ) -> JsonValue:
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        response = await client.post(url, json=json, headers=headers)
-        response.raise_for_status()
-        return response.json()
+    response = await _http.client.post(url, json=json, headers=headers, timeout=timeout)
+    response.raise_for_status()
+    return response.json()

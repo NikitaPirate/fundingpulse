@@ -1,18 +1,24 @@
 """Base exchange adapter using ABC."""
 
+import asyncio
 import logging
 from abc import ABC, abstractmethod
 from datetime import datetime
+from typing import Any
+
+from httpx import HTTPError
 
 from fundingpulse.models.contract import Contract
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
+from fundingpulse.tracker.infrastructure import http_client
 
 
 class BaseExchange(ABC):
     """Base class for exchange adapters.
 
     Subclasses must implement all abstract methods.
-    Prefer batch API if available; otherwise use fetch_live_parallel().
+    All HTTP requests go through _api_get/_api_post which enforce
+    per-exchange rate limiting via semaphore.
     """
 
     EXCHANGE_ID: str
@@ -23,6 +29,28 @@ class BaseExchange(ABC):
     Calculated using MINIMUM funding interval to avoid exceeding API limits.
     Document per-exchange reasoning in class docstring.
     """
+
+    def __init__(self, semaphore: asyncio.Semaphore | None = None) -> None:
+        self._semaphore = semaphore
+
+    async def _api_request(
+        self,
+        method: str,
+        url: str,
+        **kwargs: Any,
+    ) -> http_client.JsonValue:
+        """Rate-limited HTTP request. All adapter HTTP calls go through here."""
+        call = http_client.get if method == "GET" else http_client.post
+        if self._semaphore:
+            async with self._semaphore:
+                return await call(url, **kwargs)
+        return await call(url, **kwargs)
+
+    async def _api_get(self, url: str, **kwargs: Any) -> http_client.JsonValue:
+        return await self._api_request("GET", url, **kwargs)
+
+    async def _api_post(self, url: str, **kwargs: Any) -> http_client.JsonValue:
+        return await self._api_request("POST", url, **kwargs)
 
     @property
     def logger(self) -> logging.Logger:
@@ -100,19 +128,52 @@ class BaseExchange(ABC):
     async def fetch_live(self, contracts: list[Contract]) -> dict[Contract, FundingPoint]:
         """Fetch unsettled rates for given contracts.
 
-        Batch API exchanges should override this method.
-        Individual API exchanges should implement _fetch_live_single()
-        and use fetch_live_parallel() from utils.py.
+        Batch exchanges override with a single API call.
+        Individual API exchanges implement _fetch_live_single() and call
+        self._fetch_live_parallel(contracts) here.
         """
         ...
 
     async def _fetch_live_single(self, contract: Contract) -> FundingPoint:
-        """Fetch single contract rate - override for individual API exchanges.
+        """Fetch single contract rate — override for individual API exchanges.
 
         Only implement this if exchange lacks batch API.
-        Use fetch_live_parallel() for parallel execution.
+        Called from _fetch_live_parallel(); uses _api_get internally.
         """
         raise NotImplementedError(
             f"{self.EXCHANGE_ID}: _fetch_live_single() not implemented. "
             "Override fetch_live() instead."
         )
+
+    async def _fetch_live_parallel(
+        self, contracts: list[Contract]
+    ) -> dict[Contract, FundingPoint]:
+        """Fetch live rates via parallel per-contract requests.
+
+        For exchanges without batch API. Calls _fetch_live_single() for each
+        contract concurrently. Rate limiting is handled by _api_get inside
+        each _fetch_live_single() call.
+        """
+
+        async def _fetch_one(contract: Contract) -> FundingPoint | None:
+            try:
+                return await self._fetch_live_single(contract)
+            except HTTPError as e:
+                self.logger_live.warning(
+                    f"Failed to fetch live rate for {contract.asset.name}: {e}"
+                )
+                return None
+            except ValueError as e:
+                self.logger_live.warning(
+                    f"Invalid funding rate data for {contract.asset.name}: {e}"
+                )
+                return None
+
+        tasks = [_fetch_one(contract) for contract in contracts]
+        results = await asyncio.gather(*tasks)
+
+        return {
+            contract: result
+            for contract, result in zip(contracts, results, strict=True)
+            if result is not None
+        }

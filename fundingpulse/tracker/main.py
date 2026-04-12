@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from fundingpulse.tracker.bootstrap import bootstrap
 from fundingpulse.tracker.cli import build_parser
 from fundingpulse.tracker.exchanges import EXCHANGES
+from fundingpulse.tracker.infrastructure import http_client
 from fundingpulse.tracker.logging_setup import (
     configure_exchange_debug_logging,
     configure_live_debug_logging,
@@ -39,15 +40,19 @@ async def run_scheduler(
     exchanges: list[str] | None,
 ) -> None:
     """Bootstrap and run scheduler forever."""
-    scheduler = await bootstrap(
-        db_connection=db_connection,
-        db_engine_kwargs=db_engine_kwargs,
-        db_session_kwargs=db_session_kwargs,
-        exchanges=exchanges,
-    )
-    scheduler.start()
-    logger.info("Scheduler started, waiting for jobs...")
-    await asyncio.Event().wait()
+    await http_client.startup()
+    try:
+        scheduler = await bootstrap(
+            db_connection=db_connection,
+            db_engine_kwargs=db_engine_kwargs,
+            db_session_kwargs=db_session_kwargs,
+            exchanges=exchanges,
+        )
+        scheduler.start()
+        logger.info("Scheduler started, waiting for jobs...")
+        await asyncio.Event().wait()
+    finally:
+        await http_client.shutdown()
 
 
 def main() -> None:

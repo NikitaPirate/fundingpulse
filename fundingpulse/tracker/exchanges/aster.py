@@ -28,7 +28,6 @@ from datetime import datetime
 from fundingpulse.models.contract import Contract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
-from fundingpulse.tracker.infrastructure import http_client
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +40,6 @@ class AsterExchange(BaseExchange):
 
     # ~333 days (1000 records / 3 records per day for 8-hour interval)
     _FETCH_STEP = 8000
-
-    # Limit concurrent funding interval detection requests to avoid rate limiting
-    _semaphore = asyncio.Semaphore(10)
 
     def _format_symbol(self, contract: Contract) -> str:
         return f"{contract.asset.name}{contract.quote_name}"
@@ -61,8 +57,8 @@ class AsterExchange(BaseExchange):
 
         # Fetch exchangeInfo and premiumIndex in parallel
         exchange_response, premium_response = await asyncio.gather(
-            http_client.get(f"{self.API_ENDPOINT}/v1/exchangeInfo"),
-            http_client.get(f"{self.API_ENDPOINT}/v1/premiumIndex"),
+            self._api_get(f"{self.API_ENDPOINT}/v1/exchangeInfo"),
+            self._api_get(f"{self.API_ENDPOINT}/v1/premiumIndex"),
         )
 
         exchange_data = exchange_response
@@ -152,32 +148,31 @@ class AsterExchange(BaseExchange):
         nextFundingTime from premiumIndex to calculate the funding interval.
         """
         try:
-            async with self._semaphore:
-                response = await http_client.get(
-                    f"{self.API_ENDPOINT}/v1/fundingRate",
-                    params={"symbol": symbol, "limit": 1},
-                )
+            response = await self._api_get(
+                f"{self.API_ENDPOINT}/v1/fundingRate",
+                params={"symbol": symbol, "limit": 1},
+            )
 
-                last_funding_data = response
-                assert isinstance(last_funding_data, list), "fundingRate must return list"
+            last_funding_data = response
+            assert isinstance(last_funding_data, list), "fundingRate must return list"
 
-                if not last_funding_data:
-                    logger.warning(f"No historical funding data found for {symbol}")
-                    return None
+            if not last_funding_data:
+                logger.warning(f"No historical funding data found for {symbol}")
+                return None
 
-                last_funding_time = last_funding_data[0]["fundingTime"]
-                next_funding_time = premium_item["nextFundingTime"]
+            last_funding_time = last_funding_data[0]["fundingTime"]
+            next_funding_time = premium_item["nextFundingTime"]
 
-                # Calculate interval in hours
-                interval_ms = next_funding_time - last_funding_time
-                interval_hours = interval_ms / 1000 / 3600
+            # Calculate interval in hours
+            interval_ms = next_funding_time - last_funding_time
+            interval_hours = interval_ms / 1000 / 3600
 
-                if interval_hours <= 0:
-                    logger.warning(f"Invalid funding interval {interval_hours}h for {symbol}")
-                    return None
+            if interval_hours <= 0:
+                logger.warning(f"Invalid funding interval {interval_hours}h for {symbol}")
+                return None
 
-                funding_interval = int(max(1, round(interval_hours)))
-                return symbol, funding_interval
+            funding_interval = int(max(1, round(interval_hours)))
+            return symbol, funding_interval
 
         except Exception as e:
             logger.warning(f"Failed to get funding interval for {symbol}: {e}")
@@ -188,7 +183,7 @@ class AsterExchange(BaseExchange):
     ) -> list[FundingPoint]:
         symbol = self._format_symbol(contract)
 
-        response = await http_client.get(
+        response = await self._api_get(
             f"{self.API_ENDPOINT}/v1/fundingRate",
             params={
                 "symbol": symbol,
@@ -215,7 +210,7 @@ class AsterExchange(BaseExchange):
 
         Similar to Backpack/Extended pattern - all markets in one request.
         """
-        response = await http_client.get(f"{self.API_ENDPOINT}/v1/premiumIndex")
+        response = await self._api_get(f"{self.API_ENDPOINT}/v1/premiumIndex")
 
         markets = response
         assert isinstance(markets, list), "premiumIndex must return list"

@@ -10,7 +10,6 @@ from datetime import datetime
 from fundingpulse.models.contract import Contract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
-from fundingpulse.tracker.infrastructure import http_client
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,7 @@ class KucoinExchange(BaseExchange):
         return f"{contract.asset.name}{contract.quote_name}M"
 
     async def get_contracts(self) -> list[ContractInfo]:
-        response = await http_client.get(f"{self.API_ENDPOINT}/api/v1/contracts/active")
+        response = await self._api_get(f"{self.API_ENDPOINT}/api/v1/contracts/active")
 
         assert isinstance(response, dict)
 
@@ -67,7 +66,7 @@ class KucoinExchange(BaseExchange):
     ) -> list[FundingPoint]:
         symbol = self._format_symbol(contract)
 
-        response = await http_client.get(
+        response = await self._api_get(
             f"{self.API_ENDPOINT}/api/v1/contract/funding-rates",
             params={
                 "symbol": symbol,
@@ -92,7 +91,7 @@ class KucoinExchange(BaseExchange):
         return points
 
     async def _fetch_all_rates(self) -> dict[str, FundingPoint]:
-        response = await http_client.get(f"{self.API_ENDPOINT}/api/v1/contracts/active")
+        response = await self._api_get(f"{self.API_ENDPOINT}/api/v1/contracts/active")
 
         assert isinstance(response, dict)
 
