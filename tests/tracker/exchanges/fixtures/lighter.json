@@ -1,0 +1,54 @@
+{
+  "get_contracts": {
+    "http_get": [
+      {
+        "order_books": [
+          {"symbol": "BTC", "market_id": 1, "market_type": "perp"},
+          {"symbol": "ETH", "market_id": 2, "market_type": "spot"}
+        ]
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 1,
+    "expected_sample": {
+      "asset_name": "BTC",
+      "quote": "USD",
+      "funding_interval": 1,
+      "section_name": "lighter"
+    }
+  },
+  "fetch_history": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USD",
+      "section_name": "lighter",
+      "funding_interval": 1
+    },
+    "adapter_state": {"_asset_to_id": {"BTC": 1}},
+    "http_get": [
+      {
+        "fundings": [
+          {"rate": "0.01", "direction": "long", "timestamp": 1704067200}
+        ]
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 1
+  },
+  "fetch_live": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USD",
+      "section_name": "lighter",
+      "funding_interval": 1
+    },
+    "adapter_state": {"_asset_to_id": {"BTC": 1}},
+    "ws_responses": [
+      "{\"type\": \"connected\"}",
+      "{\"market_stats\": {\"1\": {\"current_funding_rate\": \"0.01\"}}}"
+    ],
+    "http_get": [],
+    "http_post": [],
+    "expected_count_gte": 1
+  }
+}

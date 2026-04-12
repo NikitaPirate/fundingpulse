@@ -1,0 +1,71 @@
+{
+  "get_contracts": {
+    "http_get": [
+      {
+        "result": {
+          "list": [
+            {
+              "contractType": "LinearPerpetual",
+              "baseCoin": "BTC",
+              "quoteCoin": "USDT",
+              "fundingInterval": 480
+            },
+            {
+              "contractType": "InversePerpetual",
+              "baseCoin": "ETH",
+              "quoteCoin": "USD",
+              "fundingInterval": 480
+            }
+          ],
+          "nextPageCursor": null
+        }
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 1,
+    "expected_sample": {
+      "asset_name": "BTC",
+      "quote": "USDT",
+      "funding_interval": 8,
+      "section_name": "bybit"
+    }
+  },
+  "fetch_history": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USDT",
+      "section_name": "bybit",
+      "funding_interval": 8
+    },
+    "http_get": [
+      {
+        "result": {
+          "list": [
+            {"fundingRate": "0.0001", "fundingRateTimestamp": "1704067200000"}
+          ]
+        }
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 1
+  },
+  "fetch_live": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USDT",
+      "section_name": "bybit",
+      "funding_interval": 8
+    },
+    "http_get": [
+      {
+        "result": {
+          "list": [
+            {"symbol": "BTCUSDT", "fundingRate": "0.0001"}
+          ]
+        }
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 1
+  }
+}

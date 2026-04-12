@@ -1,0 +1,55 @@
+{
+  "get_contracts": {
+    "http_get": [
+      {
+        "markets": {
+          "BTC-USD": {},
+          "ETH-USD": {},
+          "ETHBTC": {}
+        }
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 2,
+    "expected_sample": {
+      "asset_name": "BTC",
+      "quote": "USD",
+      "funding_interval": 1,
+      "section_name": "dydx"
+    }
+  },
+  "fetch_history": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USD",
+      "section_name": "dydx",
+      "funding_interval": 1
+    },
+    "http_get": [
+      {
+        "historicalFunding": [
+          {"rate": "0.0001", "effectiveAt": "2024-01-01T00:00:00"}
+        ]
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 1
+  },
+  "fetch_live": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USD",
+      "section_name": "dydx",
+      "funding_interval": 1
+    },
+    "http_get": [
+      {
+        "markets": {
+          "BTC-USD": {"nextFundingRate": "0.0001"}
+        }
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 1
+  }
+}

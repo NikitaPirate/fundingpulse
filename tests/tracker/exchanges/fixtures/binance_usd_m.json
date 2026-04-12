@@ -1,0 +1,49 @@
+{
+  "get_contracts": {
+    "http_get": [
+      {
+        "symbols": [
+          {"contractType": "PERPETUAL", "baseAsset": "BTC", "quoteAsset": "USDT", "pair": "BTCUSDT"},
+          {"contractType": "QUARTERLY", "baseAsset": "ETH", "quoteAsset": "USDT", "pair": "ETHUSDT"}
+        ]
+      },
+      [
+        {"symbol": "BTCUSDT", "fundingIntervalHours": 8}
+      ]
+    ],
+    "http_post": [],
+    "expected_count_gte": 1,
+    "expected_sample": {
+      "asset_name": "BTC",
+      "quote": "USDT",
+      "funding_interval": 8,
+      "section_name": "binance_usd-m"
+    }
+  },
+  "fetch_history": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USDT",
+      "section_name": "binance_usd-m",
+      "funding_interval": 8
+    },
+    "http_get": [
+      [{"fundingRate": "0.0001", "fundingTime": 1704067200000}]
+    ],
+    "http_post": [],
+    "expected_count_gte": 1
+  },
+  "fetch_live": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USDT",
+      "section_name": "binance_usd-m",
+      "funding_interval": 8
+    },
+    "http_get": [
+      [{"symbol": "BTCUSDT", "lastFundingRate": "0.0001"}]
+    ],
+    "http_post": [],
+    "expected_count_gte": 1
+  }
+}

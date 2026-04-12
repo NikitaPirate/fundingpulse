@@ -1,0 +1,41 @@
+{
+  "get_contracts": {
+    "http_get": [],
+    "http_post": [
+      {"universe": [{"name": "BTC"}, {"name": "ETH"}]}
+    ],
+    "expected_count_gte": 2,
+    "expected_sample": {
+      "asset_name": "BTC",
+      "quote": "USD",
+      "funding_interval": 1,
+      "section_name": "hyperliquid"
+    }
+  },
+  "fetch_history": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USD",
+      "section_name": "hyperliquid",
+      "funding_interval": 1
+    },
+    "http_get": [],
+    "http_post": [
+      [{"fundingRate": "0.0001", "time": 1704067200000}]
+    ],
+    "expected_count_gte": 1
+  },
+  "fetch_live": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USD",
+      "section_name": "hyperliquid",
+      "funding_interval": 1
+    },
+    "http_get": [],
+    "http_post": [
+      [{"universe": [{"name": "BTC"}]}, [{"funding": "0.0001"}]]
+    ],
+    "expected_count_gte": 1
+  }
+}

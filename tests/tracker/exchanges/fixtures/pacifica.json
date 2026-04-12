@@ -1,0 +1,55 @@
+{
+  "get_contracts": {
+    "http_get": [
+      {
+        "success": true,
+        "data": [
+          {"symbol": "BTC"},
+          {"symbol": "ETH"}
+        ]
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 2,
+    "expected_sample": {
+      "asset_name": "BTC",
+      "quote": "USD",
+      "funding_interval": 1,
+      "section_name": "pacifica"
+    }
+  },
+  "fetch_history": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USD",
+      "section_name": "pacifica",
+      "funding_interval": 1
+    },
+    "http_get": [
+      {
+        "success": true,
+        "data": [{"funding_rate": "0.0001", "created_at": 1704067200000}],
+        "has_more": false,
+        "next_cursor": null
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 1
+  },
+  "fetch_live": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USD",
+      "section_name": "pacifica",
+      "funding_interval": 1
+    },
+    "http_get": [
+      {
+        "success": true,
+        "data": [{"symbol": "BTC", "funding": "0.0001"}]
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 1
+  }
+}

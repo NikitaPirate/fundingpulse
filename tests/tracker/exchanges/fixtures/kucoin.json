@@ -1,0 +1,70 @@
+{
+  "get_contracts": {
+    "http_get": [
+      {
+        "code": "200000",
+        "data": [
+          {
+            "status": "Open",
+            "baseCurrency": "BTC",
+            "quoteCurrency": "USDT",
+            "fundingRateGranularity": 28800000
+          },
+          {
+            "status": "Closed",
+            "baseCurrency": "ETH",
+            "quoteCurrency": "USDT",
+            "fundingRateGranularity": 28800000
+          }
+        ]
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 1,
+    "expected_sample": {
+      "asset_name": "BTC",
+      "quote": "USDT",
+      "funding_interval": 8,
+      "section_name": "kucoin"
+    }
+  },
+  "fetch_history": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USDT",
+      "section_name": "kucoin",
+      "funding_interval": 8
+    },
+    "http_get": [
+      {
+        "code": "200000",
+        "data": [{"fundingRate": "0.0001", "timepoint": "1704067200000"}]
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 1
+  },
+  "fetch_live": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USDT",
+      "section_name": "kucoin",
+      "funding_interval": 8
+    },
+    "http_get": [
+      {
+        "code": "200000",
+        "data": [
+          {
+            "status": "Open",
+            "symbol": "BTCUSDTM",
+            "fundingRateGranularity": 28800000,
+            "fundingFeeRate": 0.0001
+          }
+        ]
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 1
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "get_contracts": {
+    "http_get": [
+      {
+        "results": [
+          {"asset_kind": "PERP", "symbol": "BTC-USD-PERP", "base_currency": "BTC"},
+          {"asset_kind": "SPOT", "symbol": "ETH-USD", "base_currency": "ETH"}
+        ]
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 1,
+    "expected_sample": {
+      "asset_name": "BTC",
+      "quote": "USD",
+      "funding_interval": 1,
+      "section_name": "paradex"
+    }
+  },
+  "fetch_history": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USD",
+      "section_name": "paradex",
+      "funding_interval": 1
+    },
+    "use_before": true,
+    "http_get": [
+      {
+        "results": [
+          {"created_at": 1704139200000, "funding_rate": "0.0008"}
+        ]
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 1
+  },
+  "fetch_live": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USD",
+      "section_name": "paradex",
+      "funding_interval": 1
+    },
+    "http_get": [
+      {
+        "results": [{"funding_rate": "0.0008"}]
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 1
+  }
+}

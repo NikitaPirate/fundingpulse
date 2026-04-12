@@ -1,0 +1,44 @@
+{
+  "get_contracts": {
+    "http_get": [
+      [
+        {"symbol": "BTC_USDT_PERP", "marketType": "PERP", "fundingInterval": 3600000},
+        {"symbol": "ETH_USD_SPOT", "marketType": "SPOT", "fundingInterval": null}
+      ]
+    ],
+    "http_post": [],
+    "expected_count_gte": 1,
+    "expected_sample": {
+      "asset_name": "BTC",
+      "quote": "USDT",
+      "funding_interval": 1,
+      "section_name": "backpack"
+    }
+  },
+  "fetch_history": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USDT",
+      "section_name": "backpack",
+      "funding_interval": 1
+    },
+    "http_get": [
+      [{"fundingRate": "0.0001", "intervalEndTimestamp": "2024-01-01T01:00:00"}]
+    ],
+    "http_post": [],
+    "expected_count_gte": 1
+  },
+  "fetch_live": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USDT",
+      "section_name": "backpack",
+      "funding_interval": 1
+    },
+    "http_get": [
+      [{"fundingRate": "0.0001", "intervalEndTimestamp": "2024-01-01T01:00:00"}]
+    ],
+    "http_post": [],
+    "expected_count_gte": 1
+  }
+}

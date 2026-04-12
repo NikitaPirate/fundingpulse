@@ -1,0 +1,46 @@
+{
+  "get_contracts": {
+    "http_get": [
+      {
+        "symbols": [
+          {"contractType": "PERPETUAL", "baseAsset": "BTC", "quoteAsset": "USD"},
+          {"contractType": "QUARTERLY", "baseAsset": "ETH", "quoteAsset": "USD"}
+        ]
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 1,
+    "expected_sample": {
+      "asset_name": "BTC",
+      "quote": "USD",
+      "funding_interval": 8,
+      "section_name": "binance_coin-m"
+    }
+  },
+  "fetch_history": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USD",
+      "section_name": "binance_coin-m",
+      "funding_interval": 8
+    },
+    "http_get": [
+      [{"fundingRate": "0.0001", "fundingTime": 1704067200000}]
+    ],
+    "http_post": [],
+    "expected_count_gte": 1
+  },
+  "fetch_live": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USD",
+      "section_name": "binance_coin-m",
+      "funding_interval": 8
+    },
+    "http_get": [
+      [{"symbol": "BTCUSD_PERP", "lastFundingRate": "0.0001"}]
+    ],
+    "http_post": [],
+    "expected_count_gte": 1
+  }
+}

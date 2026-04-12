@@ -1,0 +1,66 @@
+{
+  "get_contracts": {
+    "http_get": [],
+    "http_post": [
+      {
+        "result": {
+          "instruments": [
+            {"instrument_name": "BTC-PERP", "is_active": true},
+            {"instrument_name": "ETH-PERP", "is_active": false}
+          ],
+          "pagination": {"num_pages": 1}
+        }
+      }
+    ],
+    "expected_count_gte": 1,
+    "expected_sample": {
+      "asset_name": "BTC",
+      "quote": "USD",
+      "funding_interval": 1,
+      "section_name": "derive"
+    }
+  },
+  "fetch_history": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USD",
+      "section_name": "derive",
+      "funding_interval": 1
+    },
+    "http_get": [],
+    "http_post": [
+      {
+        "result": {
+          "funding_rate_history": [
+            {"funding_rate": "0.0001", "timestamp": 1704067200000}
+          ]
+        }
+      }
+    ],
+    "expected_count_gte": 1
+  },
+  "fetch_live": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USD",
+      "section_name": "derive",
+      "funding_interval": 1
+    },
+    "http_get": [],
+    "http_post": [
+      {
+        "result": {
+          "instruments": [
+            {
+              "instrument_name": "BTC-PERP",
+              "is_active": true,
+              "perp_details": {"funding_rate": "0.0001"}
+            }
+          ],
+          "pagination": {"num_pages": 1}
+        }
+      }
+    ],
+    "expected_count_gte": 1
+  }
+}

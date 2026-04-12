@@ -1,0 +1,59 @@
+{
+  "get_contracts": {
+    "http_get": [
+      {
+        "status": "OK",
+        "data": [
+          {"status": "ACTIVE", "assetName": "BTC", "collateralAssetName": "USD"},
+          {"status": "INACTIVE", "assetName": "ETH", "collateralAssetName": "USD"}
+        ]
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 1,
+    "expected_sample": {
+      "asset_name": "BTC",
+      "quote": "USD",
+      "funding_interval": 1,
+      "section_name": "extended"
+    }
+  },
+  "fetch_history": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USD",
+      "section_name": "extended",
+      "funding_interval": 1
+    },
+    "http_get": [
+      {
+        "status": "OK",
+        "data": [{"f": "0.0001", "T": 1704067200000}]
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 1
+  },
+  "fetch_live": {
+    "contract": {
+      "asset_name": "BTC",
+      "quote_name": "USD",
+      "section_name": "extended",
+      "funding_interval": 1
+    },
+    "http_get": [
+      {
+        "status": "OK",
+        "data": [
+          {
+            "status": "ACTIVE",
+            "name": "BTC-USD",
+            "marketStats": {"fundingRate": "0.0001"}
+          }
+        ]
+      }
+    ],
+    "http_post": [],
+    "expected_count_gte": 1
+  }
+}
