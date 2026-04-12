@@ -202,7 +202,7 @@ class ExchangeOrchestrator:
                 f"{len(api_contracts)} active, {deprecated_count} deprecated"
             )
 
-        await self._mv_refresher.signal_contracts_changed(self._section_name)
+        self._mv_refresher.signal_contracts_changed(self._section_name)
         logger.debug(f"[{self._section_name}] Signaled MV refresher")
 
     # ------------------------------------------------------------------

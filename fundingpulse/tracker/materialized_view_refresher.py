@@ -18,7 +18,7 @@ class MaterializedViewRefresher:
         self._pending_refresh = False
         self._logger = logging.getLogger(__name__)
 
-    async def signal_contracts_changed(self, exchange_name: str) -> None:
+    def signal_contracts_changed(self, exchange_name: str) -> None:
         self._last_signal_time = time.time()
         self._pending_refresh = True
         self._logger.debug(f"Received contracts change signal from {exchange_name}")
