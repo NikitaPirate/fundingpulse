@@ -40,14 +40,12 @@ class ExchangeOrchestrator:
         exchange_adapter: BaseExchange,
         section_name: str,
         db: SessionFactory,
-        semaphore: asyncio.Semaphore,
         mv_refresher: MaterializedViewRefresher,
     ) -> None:
         self._exchange_adapter = exchange_adapter
         self._section_name = section_name
         self._db = db
         self._mv_refresher = mv_refresher
-        self._semaphore = semaphore
 
     # ------------------------------------------------------------------
     # Public API
@@ -212,7 +210,7 @@ class ExchangeOrchestrator:
     # ------------------------------------------------------------------
 
     async def _process_all_contracts(self, contracts: Sequence[Contract]) -> list[tuple[int, int]]:
-        """Process all contracts concurrently with semaphore control."""
+        """Process all contracts concurrently."""
         logger.debug(f"[{self._section_name}] Starting gather for {len(contracts)} contracts")
         tasks = [self._process_contract(contract) for contract in contracts]
         results = await asyncio.gather(*tasks)
@@ -225,31 +223,30 @@ class ExchangeOrchestrator:
         Returns:
             (was_updated, points): 1/0 flag and number of new data points.
         """
-        async with self._semaphore:
-            try:
-                if not contract.synced:
-                    async with asyncio.timeout(600.0):
-                        points = await self._sync_contract(contract)
-                else:
-                    async with asyncio.timeout(60.0):
-                        points = await self._update_contract(contract)
-                return (1 if points > 0 else 0, points)
-            except TimeoutError:
-                contract_id = f"{contract.asset.name}/{contract.quote_name}"
-                timeout_duration = "10m" if not contract.synced else "1m"
-                logger.warning(
-                    f"[{self._section_name}] {contract_id} timed out after "
-                    f"{timeout_duration} — operation: "
-                    f"{'sync' if not contract.synced else 'update'}"
-                )
-                return (0, 0)
-            except Exception as e:
-                logger.error(
-                    f"[{self._section_name}] Failed to process contract "
-                    f"{contract.asset.name}/{contract.quote_name}: {e}",
-                    exc_info=True,
-                )
-                return (0, 0)
+        try:
+            if not contract.synced:
+                async with asyncio.timeout(600.0):
+                    points = await self._sync_contract(contract)
+            else:
+                async with asyncio.timeout(60.0):
+                    points = await self._update_contract(contract)
+            return (1 if points > 0 else 0, points)
+        except TimeoutError:
+            contract_id = f"{contract.asset.name}/{contract.quote_name}"
+            timeout_duration = "10m" if not contract.synced else "1m"
+            logger.warning(
+                f"[{self._section_name}] {contract_id} timed out after "
+                f"{timeout_duration} — operation: "
+                f"{'sync' if not contract.synced else 'update'}"
+            )
+            return (0, 0)
+        except Exception as e:
+            logger.error(
+                f"[{self._section_name}] Failed to process contract "
+                f"{contract.asset.name}/{contract.quote_name}: {e}",
+                exc_info=True,
+            )
+            return (0, 0)
 
     async def _sync_contract(self, contract: Contract) -> int:
         """Fetch full history backwards until no more data; mark contract as synced.

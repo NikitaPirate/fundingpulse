@@ -37,7 +37,6 @@ from datetime import datetime, timedelta
 from fundingpulse.models.contract import Contract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
-from fundingpulse.tracker.infrastructure import http_client
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +59,7 @@ class ParadexExchange(BaseExchange):
         return f"{contract.asset.name}-USD-PERP"
 
     async def get_contracts(self) -> list[ContractInfo]:
-        response = await http_client.get(f"{self.API_ENDPOINT}/markets")
+        response = await self._api_get(f"{self.API_ENDPOINT}/markets")
 
         assert isinstance(response, dict)
         markets = response["results"]
@@ -121,7 +120,7 @@ class ParadexExchange(BaseExchange):
             f"Fetching history for {self.EXCHANGE_ID}/{symbol} from {start_time} to {end_time}"
         )
 
-        response = await http_client.get(
+        response = await self._api_get(
             f"{self.API_ENDPOINT}/funding/data",
             params={
                 "market": symbol,
@@ -216,7 +215,7 @@ class ParadexExchange(BaseExchange):
                 # Fetch from API
                 hour_end_ms = int(hour_end.timestamp() * 1000)
 
-                response = await http_client.get(
+                response = await self._api_get(
                     f"{self.API_ENDPOINT}/funding/data",
                     params={
                         "market": symbol,
@@ -319,7 +318,7 @@ class ParadexExchange(BaseExchange):
         symbol = self._format_symbol(contract)
         contract_id = str(contract.id)
 
-        response = await http_client.get(
+        response = await self._api_get(
             f"{self.API_ENDPOINT}/funding/data",
             params={
                 "market": symbol,
@@ -365,6 +364,4 @@ class ParadexExchange(BaseExchange):
         Individual API pattern (no batch endpoint).
         Stores rates in live cache for fetch_after optimization.
         """
-        from fundingpulse.tracker.exchanges.utils import fetch_live_parallel
-
-        return await fetch_live_parallel(self, contracts)
+        return await self._fetch_live_parallel(contracts)

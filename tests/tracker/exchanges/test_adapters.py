@@ -63,7 +63,7 @@ def make_adapter(exchange_id: str, state: dict[str, Any] | None = None) -> BaseE
     Fresh instance per test avoids contamination from mutable instance state
     (e.g. lighter._asset_to_id, paradex._live_cache).
     """
-    adapter = type(EXCHANGES[exchange_id])()
+    adapter = EXCHANGES[exchange_id]()
     if state:
         for key, value in state.items():
             setattr(adapter, key, value)

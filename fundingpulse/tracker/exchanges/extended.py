@@ -21,7 +21,6 @@ from datetime import datetime
 from fundingpulse.models.contract import Contract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
-from fundingpulse.tracker.infrastructure import http_client
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +38,7 @@ class ExtendedExchange(BaseExchange):
         return f"{contract.asset.name}-{contract.quote_name}"
 
     async def get_contracts(self) -> list[ContractInfo]:
-        response = await http_client.get(f"{self.API_ENDPOINT}/api/v1/info/markets")
+        response = await self._api_get(f"{self.API_ENDPOINT}/api/v1/info/markets")
 
         assert isinstance(response, dict)
         if response.get("status") != "OK":
@@ -72,7 +71,7 @@ class ExtendedExchange(BaseExchange):
     ) -> list[FundingPoint]:
         symbol = self._format_symbol(contract)
 
-        response = await http_client.get(
+        response = await self._api_get(
             f"{self.API_ENDPOINT}/api/v1/info/{symbol}/funding",
             params={
                 "startTime": start_ms,
@@ -100,7 +99,7 @@ class ExtendedExchange(BaseExchange):
         Extended provides batch API that returns all markets at once.
         Similar to Backpack exchange pattern.
         """
-        response = await http_client.get(f"{self.API_ENDPOINT}/api/v1/info/markets")
+        response = await self._api_get(f"{self.API_ENDPOINT}/api/v1/info/markets")
 
         assert isinstance(response, dict)
         if response.get("status") != "OK":

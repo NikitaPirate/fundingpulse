@@ -10,7 +10,6 @@ from datetime import datetime
 from fundingpulse.models.contract import Contract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
-from fundingpulse.tracker.infrastructure import http_client
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,7 @@ class HyperliquidExchange(BaseExchange):
         if self._DEX:
             json_payload["dex"] = self._DEX
 
-        response = await http_client.post(
+        response = await self._api_post(
             self.API_ENDPOINT,
             json=json_payload,
             headers={"Content-Type": "application/json"},
@@ -61,7 +60,7 @@ class HyperliquidExchange(BaseExchange):
     ) -> list[FundingPoint]:
         symbol = self._format_symbol(contract)
 
-        response = await http_client.post(
+        response = await self._api_post(
             self.API_ENDPOINT,
             json={
                 "type": "fundingHistory",
@@ -87,7 +86,7 @@ class HyperliquidExchange(BaseExchange):
         if self._DEX:
             json_payload["dex"] = self._DEX
 
-        response = await http_client.post(
+        response = await self._api_post(
             self.API_ENDPOINT,
             json=json_payload,
             headers={"Content-Type": "application/json"},

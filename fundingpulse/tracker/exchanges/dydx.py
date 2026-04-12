@@ -10,7 +10,6 @@ from datetime import datetime
 from fundingpulse.models.contract import Contract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
-from fundingpulse.tracker.infrastructure import http_client
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,7 @@ class DydxExchange(BaseExchange):
         return f"{contract.asset.name}-USD"
 
     async def get_contracts(self) -> list[ContractInfo]:
-        response = await http_client.get(
+        response = await self._api_get(
             f"{self.API_ENDPOINT}/perpetualMarkets",
             headers={"Content-Type": "application/json"},
         )
@@ -60,7 +59,7 @@ class DydxExchange(BaseExchange):
         # dYdX uses ISO8601 format, not milliseconds
         end_time_iso = datetime.fromtimestamp(end_ms / 1000).isoformat()
 
-        response = await http_client.get(
+        response = await self._api_get(
             f"{self.API_ENDPOINT}/historicalFunding/{symbol}",
             params={
                 "effectiveBeforeOrAt": end_time_iso,
@@ -82,7 +81,7 @@ class DydxExchange(BaseExchange):
         return points
 
     async def _fetch_all_rates(self) -> dict[str, FundingPoint]:
-        response = await http_client.get(
+        response = await self._api_get(
             f"{self.API_ENDPOINT}/perpetualMarkets",
             headers={"Content-Type": "application/json"},
         )

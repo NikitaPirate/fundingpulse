@@ -110,11 +110,14 @@ def _register_exchange_jobs(
     seconds_per_exchange = 60 // len(exchange_names)
 
     for index, exchange_name in enumerate(exchange_names):
+        adapter = EXCHANGES[exchange_name](
+            semaphore=asyncio.Semaphore(concurrency_limit),
+        )
+
         orchestrator = ExchangeOrchestrator(
-            exchange_adapter=EXCHANGES[exchange_name],
+            exchange_adapter=adapter,
             section_name=exchange_name,
             db=session_factory,
-            semaphore=asyncio.Semaphore(concurrency_limit),
             mv_refresher=mv_refresher,
         )
         _register_update_job(scheduler, exchange_name, orchestrator)

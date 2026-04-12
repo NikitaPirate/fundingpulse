@@ -11,7 +11,6 @@ from typing import Any
 from fundingpulse.models.contract import Contract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
-from fundingpulse.tracker.infrastructure import http_client
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,7 @@ class OkxExchange(BaseExchange):
         return f"{contract.asset.name}-{contract.quote_name}-SWAP"
 
     async def get_contracts(self) -> list[ContractInfo]:
-        response: Any = await http_client.get(
+        response: Any = await self._api_get(
             f"{self.API_ENDPOINT}/public/instruments",
             params={"instType": "SWAP"},
         )
@@ -56,7 +55,7 @@ class OkxExchange(BaseExchange):
     ) -> list[FundingPoint]:
         symbol = self._format_symbol(contract)
 
-        response: Any = await http_client.get(
+        response: Any = await self._api_get(
             f"{self.API_ENDPOINT}/public/funding-rate-history",
             params={
                 "instId": symbol,
@@ -79,7 +78,7 @@ class OkxExchange(BaseExchange):
     async def _fetch_live_single(self, contract: Contract) -> FundingPoint:
         symbol = self._format_symbol(contract)
 
-        response: Any = await http_client.get(
+        response: Any = await self._api_get(
             f"{self.API_ENDPOINT}/public/funding-rate",
             params={"instId": symbol},
         )
@@ -94,6 +93,4 @@ class OkxExchange(BaseExchange):
         return FundingPoint(rate=rate, timestamp=now)
 
     async def fetch_live(self, contracts: list[Contract]) -> dict[Contract, FundingPoint]:
-        from fundingpulse.tracker.exchanges.utils import fetch_live_parallel
-
-        return await fetch_live_parallel(self, contracts)
+        return await self._fetch_live_parallel(contracts)

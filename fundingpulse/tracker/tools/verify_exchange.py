@@ -98,7 +98,7 @@ async def verify_exchange(
         )
         return False
 
-    adapter = EXCHANGES[exchange_id]
+    adapter = EXCHANGES[exchange_id]()
 
     console.print("[bold]Step 1: Protocol Validation[/bold]")
     console.print(f"  [green][OK][/green] EXCHANGE_ID: {adapter.EXCHANGE_ID}")

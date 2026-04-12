@@ -11,7 +11,6 @@ from typing import Any
 from fundingpulse.models.contract import Contract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
-from fundingpulse.tracker.infrastructure import http_client
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,7 @@ class BinanceCoinmExchange(BaseExchange):
         return f"{contract.asset.name}{contract.quote_name}_PERP"
 
     async def get_contracts(self) -> list[ContractInfo]:
-        response: Any = await http_client.get(f"{self.API_ENDPOINT}/v1/exchangeInfo")
+        response: Any = await self._api_get(f"{self.API_ENDPOINT}/v1/exchangeInfo")
 
         contracts = []
         for instrument in response["symbols"]:
@@ -50,7 +49,7 @@ class BinanceCoinmExchange(BaseExchange):
     ) -> list[FundingPoint]:
         symbol = self._format_symbol(contract)
 
-        response: Any = await http_client.get(
+        response: Any = await self._api_get(
             f"{self.API_ENDPOINT}/v1/fundingRate",
             params={
                 "symbol": symbol,
@@ -70,7 +69,7 @@ class BinanceCoinmExchange(BaseExchange):
         return points
 
     async def _fetch_all_rates(self) -> dict[str, FundingPoint]:
-        response: Any = await http_client.get(f"{self.API_ENDPOINT}/v1/premiumIndex")
+        response: Any = await self._api_get(f"{self.API_ENDPOINT}/v1/premiumIndex")
 
         now = datetime.now()
         rates = {}

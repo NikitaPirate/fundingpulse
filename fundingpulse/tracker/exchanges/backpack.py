@@ -13,7 +13,6 @@ from datetime import datetime
 from fundingpulse.models.contract import Contract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
-from fundingpulse.tracker.infrastructure import http_client
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,7 @@ class BackpackExchange(BaseExchange):
         return f"{contract.asset.name}_{contract.quote_name}_PERP_{contract.funding_interval}"
 
     async def get_contracts(self) -> list[ContractInfo]:
-        response = await http_client.get(f"{self.API_ENDPOINT}/markets")
+        response = await self._api_get(f"{self.API_ENDPOINT}/markets")
 
         assert isinstance(response, list)
 
@@ -68,7 +67,7 @@ class BackpackExchange(BaseExchange):
         if limit < 1:
             return []
 
-        response = await http_client.get(
+        response = await self._api_get(
             f"{self.API_ENDPOINT}/fundingRates",
             params={"symbol": api_symbol, "limit": limit, "offset": offset_end},
         )
@@ -100,7 +99,7 @@ class BackpackExchange(BaseExchange):
         if limit < 1:
             return []
 
-        response = await http_client.get(
+        response = await self._api_get(
             f"{self.API_ENDPOINT}/fundingRates",
             params={"symbol": api_symbol, "limit": limit, "offset": offset_end},
         )
@@ -134,7 +133,7 @@ class BackpackExchange(BaseExchange):
         if limit < 1:
             return []
 
-        response = await http_client.get(
+        response = await self._api_get(
             f"{self.API_ENDPOINT}/fundingRates",
             params={"symbol": api_symbol, "limit": limit, "offset": offset_end},
         )
@@ -152,7 +151,7 @@ class BackpackExchange(BaseExchange):
     async def _fetch_live_single(self, contract: Contract) -> FundingPoint:
         api_symbol = self._format_symbol(contract).rsplit("_", 1)[0]
 
-        response = await http_client.get(
+        response = await self._api_get(
             f"{self.API_ENDPOINT}/fundingRates",
             params={"symbol": api_symbol, "limit": 1},
         )
@@ -167,6 +166,4 @@ class BackpackExchange(BaseExchange):
         return FundingPoint(rate=rate, timestamp=datetime.now())
 
     async def fetch_live(self, contracts: list[Contract]) -> dict[Contract, FundingPoint]:
-        from fundingpulse.tracker.exchanges.utils import fetch_live_parallel
-
-        return await fetch_live_parallel(self, contracts)
+        return await self._fetch_live_parallel(contracts)

@@ -13,7 +13,6 @@ import websockets
 from fundingpulse.models.contract import Contract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
-from fundingpulse.tracker.infrastructure import http_client
 
 logger = logging.getLogger(__name__)
 
@@ -28,14 +27,15 @@ class LighterExchange(BaseExchange):
     # 500 records max, 1-hour interval -> 498 hours (500 - 2 safety buffer)
     _FETCH_STEP = 498
 
-    def __init__(self) -> None:
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
         self._asset_to_id: dict[str, int] = {}
 
     def _format_symbol(self, contract: Contract) -> str:
         return str(self._asset_to_id[contract.asset.name])
 
     async def get_contracts(self) -> list[ContractInfo]:
-        response = await http_client.get(f"{self.API_ENDPOINT}/orderBooks")
+        response = await self._api_get(f"{self.API_ENDPOINT}/orderBooks")
 
         assert isinstance(response, dict)
 
@@ -64,7 +64,7 @@ class LighterExchange(BaseExchange):
     ) -> list[FundingPoint]:
         symbol = self._format_symbol(contract)
 
-        response = await http_client.get(
+        response = await self._api_get(
             f"{self.API_ENDPOINT}/fundings",
             params={
                 "market_id": int(symbol),
