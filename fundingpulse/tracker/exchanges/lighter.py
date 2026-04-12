@@ -4,6 +4,7 @@ Lighter uses 1-hour funding interval. API limit is 500 records per request.
 _FETCH_STEP = 498 hours (500 - 2 safety buffer).
 """
 
+import asyncio
 import json
 import logging
 from datetime import datetime
@@ -90,26 +91,19 @@ class LighterExchange(BaseExchange):
         return points
 
     async def _fetch_all_rates(self) -> dict[str, FundingPoint]:
-        rates = {}
+        async with asyncio.timeout(30), websockets.connect(self.WS_ENDPOINT) as ws:
+            await ws.send(json.dumps({"type": "subscribe", "channel": "market_stats/all"}))
+            await ws.recv()  # skip "connected" ack
+            data = json.loads(await ws.recv())
 
-        async with websockets.connect(self.WS_ENDPOINT) as websocket:
-            await websocket.send(json.dumps({"type": "subscribe", "channel": "market_stats/all"}))
-
-            # Skip "connected" message, get first data message
-            await websocket.recv()
-            message = await websocket.recv()
-            data = json.loads(message)
-
-            market_stats = data.get("market_stats", {})
-            for market_id, payload in market_stats.items():
-                funding_rate = payload.get("current_funding_rate")
-                if funding_rate is not None:
-                    # WebSocket returns string keys, convert to int for consistency
-                    rates[market_id] = FundingPoint(
-                        rate=float(funding_rate) / 100, timestamp=datetime.now()
-                    )
-
-        return rates
+        now = datetime.now()
+        return {
+            market_id: FundingPoint(
+                rate=float(payload["current_funding_rate"]) / 100, timestamp=now
+            )
+            for market_id, payload in data.get("market_stats", {}).items()
+            if payload.get("current_funding_rate") is not None
+        }
 
     async def fetch_live(self, contracts: list[Contract]) -> dict[Contract, FundingPoint]:
         symbol_to_contract = {self._format_symbol(c): c for c in contracts}
