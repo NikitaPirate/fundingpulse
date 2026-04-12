@@ -213,9 +213,9 @@ class ExchangeOrchestrator:
         """Process all contracts concurrently."""
         logger.debug(f"[{self._section_name}] Starting gather for {len(contracts)} contracts")
         tasks = [self._process_contract(contract) for contract in contracts]
-        results = await asyncio.gather(*tasks)
+        results = await asyncio.gather(*tasks, return_exceptions=True)
         logger.debug(f"[{self._section_name}] Gather complete")
-        return list(results)
+        return [r if not isinstance(r, BaseException) else (0, 0) for r in results]
 
     async def _process_contract(self, contract: Contract) -> tuple[int, int]:
         """Process a single contract with timeout and error isolation.
@@ -332,8 +332,8 @@ class ExchangeOrchestrator:
     async def _update_contract(self, contract: Contract) -> int:
         """Fetch new data after latest point; skip if funding interval not elapsed.
 
-        NOTE: Holds DB session open during API call. Intentionally not fixed
-        in this refactor — see _sync_contract for the correct pattern.
+        Opens/closes sessions per DB operation to avoid holding connections
+        during API calls (same pattern as _sync_contract).
         """
         logger.debug(
             f"[{self._section_name}] Checking update for "
@@ -342,46 +342,48 @@ class ExchangeOrchestrator:
 
         async with self._db.begin() as session:
             newest = await get_newest_for_contract(session, contract.id)
-            after_timestamp = newest.timestamp + timedelta(seconds=1) if newest else None
 
-            if after_timestamp is None:
-                logger.warning(
-                    f"[{self._section_name}] No historical data for "
-                    f"{contract.asset.name}/{contract.quote_name}, run sync first"
-                )
-                return 0
+        after_timestamp = newest.timestamp + timedelta(seconds=1) if newest else None
 
-            now = datetime.now()
-            time_since_last = now - after_timestamp
-            required_interval = timedelta(hours=contract.funding_interval)
+        if after_timestamp is None:
+            logger.warning(
+                f"[{self._section_name}] No historical data for "
+                f"{contract.asset.name}/{contract.quote_name}, run sync first"
+            )
+            return 0
 
-            if time_since_last < required_interval:
-                logger.debug(
-                    f"[{self._section_name}] Skipping update for "
-                    f"{contract.asset.name}/{contract.quote_name}, "
-                    f"only {time_since_last} passed (need {required_interval})"
-                )
-                return 0
+        now = datetime.now()
+        time_since_last = now - after_timestamp
+        required_interval = timedelta(hours=contract.funding_interval)
 
-            points = await self._exchange_adapter.fetch_history_after(contract, after_timestamp)
+        if time_since_last < required_interval:
+            logger.debug(
+                f"[{self._section_name}] Skipping update for "
+                f"{contract.asset.name}/{contract.quote_name}, "
+                f"only {time_since_last} passed (need {required_interval})"
+            )
+            return 0
 
-            if not points:
-                return 0
+        points = await self._exchange_adapter.fetch_history_after(contract, after_timestamp)
 
-            funding_records = [
-                HistoricalFundingPoint(
-                    contract_id=contract.id,
-                    timestamp=point.timestamp,
-                    funding_rate=point.rate,
-                )
-                for point in points
-            ]
+        if not points:
+            return 0
 
+        funding_records = [
+            HistoricalFundingPoint(
+                contract_id=contract.id,
+                timestamp=point.timestamp,
+                funding_rate=point.rate,
+            )
+            for point in points
+        ]
+
+        async with self._db.begin() as session:
             await bulk_insert(
                 session, HistoricalFundingPoint, funding_records, on_conflict="ignore"
             )
 
-            return len(points)
+        return len(points)
 
     # ------------------------------------------------------------------
     # Private: helpers
