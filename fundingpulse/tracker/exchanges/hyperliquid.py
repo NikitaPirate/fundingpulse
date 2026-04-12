@@ -81,7 +81,7 @@ class HyperliquidExchange(BaseExchange):
 
         return points
 
-    async def _fetch_all_rates(self) -> dict[str, FundingPoint]:
+    async def _fetch_live_batch(self) -> dict[str, FundingPoint]:
         json_payload = {"type": "metaAndAssetCtxs"}
         if self._DEX:
             json_payload["dex"] = self._DEX
@@ -115,13 +115,3 @@ class HyperliquidExchange(BaseExchange):
                 )
 
         return rates
-
-    async def fetch_live(self, contracts: list[Contract]) -> dict[Contract, FundingPoint]:
-        symbol_to_contract = {self._format_symbol(c): c for c in contracts}
-        all_rates = await self._fetch_all_rates()
-
-        return {
-            symbol_to_contract[symbol]: rate
-            for symbol, rate in all_rates.items()
-            if symbol in symbol_to_contract
-        }

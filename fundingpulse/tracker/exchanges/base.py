@@ -124,15 +124,31 @@ class BaseExchange(ABC):
         end_ms = int(datetime.now().timestamp() * 1000)
         return await self._fetch_history(contract, start_ms, end_ms)
 
-    @abstractmethod
     async def fetch_live(self, contracts: list[Contract]) -> dict[Contract, FundingPoint]:
         """Fetch unsettled rates for given contracts.
 
-        Batch exchanges override with a single API call.
-        Individual API exchanges implement _fetch_live_single() and call
-        self._fetch_live_parallel(contracts) here.
+        Default implementation calls _fetch_live_batch() and maps results
+        via _format_symbol(). Exchanges without batch API override this
+        to call _fetch_live_parallel() instead.
         """
-        ...
+        symbol_to_contract = {self._format_symbol(c): c for c in contracts}
+        all_rates = await self._fetch_live_batch()
+        return {
+            symbol_to_contract[symbol]: rate
+            for symbol, rate in all_rates.items()
+            if symbol in symbol_to_contract
+        }
+
+    async def _fetch_live_batch(self) -> dict[str, FundingPoint]:
+        """Fetch all live rates in one API call — override for batch exchanges.
+
+        Returns {exchange_symbol: FundingPoint} for all contracts.
+        Keys must match _format_symbol() output.
+        """
+        raise NotImplementedError(
+            f"{self.EXCHANGE_ID}: _fetch_live_batch() not implemented. "
+            "Override fetch_live() for non-batch exchanges."
+        )
 
     async def _fetch_live_single(self, contract: Contract) -> FundingPoint:
         """Fetch single contract rate — override for individual API exchanges.
@@ -140,10 +156,7 @@ class BaseExchange(ABC):
         Only implement this if exchange lacks batch API.
         Called from _fetch_live_parallel(); uses _api_get internally.
         """
-        raise NotImplementedError(
-            f"{self.EXCHANGE_ID}: _fetch_live_single() not implemented. "
-            "Override fetch_live() instead."
-        )
+        raise NotImplementedError
 
     async def _fetch_live_parallel(
         self, contracts: list[Contract]

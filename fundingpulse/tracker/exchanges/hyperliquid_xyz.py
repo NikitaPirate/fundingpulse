@@ -54,9 +54,9 @@ class HyperliquidXyzExchange(HyperliquidExchange):
 
         return mapped_contracts
 
-    async def _fetch_all_rates(self) -> dict[str, FundingPoint]:
+    async def _fetch_live_batch(self) -> dict[str, FundingPoint]:
         # Call parent to get rates with dex=xyz
-        raw_rates = await super()._fetch_all_rates()
+        raw_rates = await super()._fetch_live_batch()
 
         # Map keys from GOLD/SILVER to XAU/XAG to match get_contracts()
         mapped_rates = {}
@@ -69,7 +69,7 @@ class HyperliquidXyzExchange(HyperliquidExchange):
     async def fetch_live(self, contracts: list[Contract]) -> dict[Contract, FundingPoint]:
         # Use database symbol (XAU) as key, not API format (xyz:GOLD)
         symbol_to_contract = {c.asset.name: c for c in contracts}
-        all_rates = await self._fetch_all_rates()
+        all_rates = await self._fetch_live_batch()
 
         return {
             symbol_to_contract[symbol]: rate

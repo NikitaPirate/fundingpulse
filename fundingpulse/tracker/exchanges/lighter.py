@@ -90,7 +90,7 @@ class LighterExchange(BaseExchange):
 
         return points
 
-    async def _fetch_all_rates(self) -> dict[str, FundingPoint]:
+    async def _fetch_live_batch(self) -> dict[str, FundingPoint]:
         async with asyncio.timeout(30), websockets.connect(self.WS_ENDPOINT) as ws:
             await ws.send(json.dumps({"type": "subscribe", "channel": "market_stats/all"}))
             await ws.recv()  # skip "connected" ack
@@ -103,14 +103,4 @@ class LighterExchange(BaseExchange):
             )
             for market_id, payload in data.get("market_stats", {}).items()
             if payload.get("current_funding_rate") is not None
-        }
-
-    async def fetch_live(self, contracts: list[Contract]) -> dict[Contract, FundingPoint]:
-        symbol_to_contract = {self._format_symbol(c): c for c in contracts}
-        all_rates = await self._fetch_all_rates()
-
-        return {
-            symbol_to_contract[symbol]: rate
-            for symbol, rate in all_rates.items()
-            if symbol in symbol_to_contract
         }

@@ -81,7 +81,7 @@ class BinanceUsdmExchange(BaseExchange):
 
         return points
 
-    async def _fetch_all_rates(self) -> dict[str, FundingPoint]:
+    async def _fetch_live_batch(self) -> dict[str, FundingPoint]:
         response: Any = await self._api_get(f"{self.API_ENDPOINT}/v1/premiumIndex")
 
         now = datetime.now()
@@ -92,13 +92,3 @@ class BinanceUsdmExchange(BaseExchange):
             rates[symbol] = FundingPoint(rate=rate, timestamp=now)
 
         return rates
-
-    async def fetch_live(self, contracts: list[Contract]) -> dict[Contract, FundingPoint]:
-        symbol_to_contract = {self._format_symbol(c): c for c in contracts}
-        all_rates = await self._fetch_all_rates()
-
-        return {
-            symbol_to_contract[symbol]: rate
-            for symbol, rate in all_rates.items()
-            if symbol in symbol_to_contract
-        }
