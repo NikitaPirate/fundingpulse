@@ -31,7 +31,7 @@ dependencies = [
 
 [project.scripts]
 funding-tracker = "fundingpulse.tracker.main:main"
-verify-exchange = "fundingpulse.tracker.tools.verify_exchange:entrypoint"
+verify = "fundingpulse.tracker.tools.verify_exchange:entrypoint"
 
 [build-system]
 requires = ["hatchling"]

@@ -2,13 +2,14 @@
 
 ## verify
 
-Verification command for exchange adapters. Makes real API calls to verify that an exchange adapter correctly implements the required protocol.
+Verification command for exchange adapters. Makes real API calls against the exchange without starting scheduler jobs or touching the database.
 
 ### Usage
 
 ```bash
 uv run verify <exchange_id>
 uv run verify --list
+uv run verify --all
 ```
 
 ### Example
@@ -27,7 +28,8 @@ uv run verify hyperliquid
 2. **API: get_contracts()**
    - Makes real API call to exchange
    - Displays total number of contracts found
-   - Shows table with first 5 contracts (asset, quote, funding interval)
+   - Shows contracts in adapter order
+   - Warns when contract count looks suspiciously round (`50`, `100`, `200`, ...)
 
 3. **API: fetch_history_after(contract)**
    - Fetches funding history for selected contract (default: last 7 days)
@@ -38,12 +40,21 @@ uv run verify hyperliquid
    - Calls `fetch_live([contract])`
    - Displays sample live funding rate for returned contract
 
+5. **Batch mode**
+   - `--all` runs the same verification sequentially for every registered exchange
+   - Prints a compact summary with `ok`, `warning`, and `failed` statuses
+
 ### Useful options
 
 - `--list` - print available exchange IDs from registry
+- `--all` - verify all exchanges and print one summary table
 - `--history-days N` - change history lookback window (default: `7`)
-- `--contract-index N` - pick contract index from fetched list for deep checks
+- `--contract ASSET/QUOTE` - pick contract by symbol pair, for example `BTC/USDT`
+- `--contract-index N` - pick contract index from fetched list when `--contract` is not set
 - `--preview-limit N` - number of contracts to show in preview table
+- `--show-all-contracts` - print all returned contracts in adapter order
+- `--contracts-only` - stop after `get_contracts()` and contract output
+- `--timeout-seconds N` - optional timeout for one exchange verification; in `--all` mode defaults to `45`
 
 ### Exit codes
 
@@ -55,6 +66,7 @@ uv run verify hyperliquid
 - After implementing a new exchange adapter
 - After modifying existing adapter
 - To verify exchange API is still compatible
+- To quickly see which exchanges currently pass or fail in one run
 - Before deploying changes to production
 
 ### Example output
@@ -72,6 +84,7 @@ Step 2: API - get_contracts()
   ...
 
 Step 3: API - fetch_history_after(contract)
+  [OK] Selected contract: BTC/USDT (index 0)
   [OK] Retrieved N funding points
   Date range: ...
   Sample rate: ...
