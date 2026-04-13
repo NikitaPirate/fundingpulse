@@ -1,8 +1,10 @@
-import datetime
 import uuid
+from typing import Any, cast
 
 import sqlalchemy
 from sqlmodel import Field, SQLModel
+
+from fundingpulse.time import UtcDateTime
 
 
 class UUIDModel(SQLModel, table=False):
@@ -28,7 +30,7 @@ class NameModel(SQLModel, table=False):
 
 
 class BaseFundingPoint(SQLModel, table=False):
-    timestamp: datetime.datetime
+    timestamp: UtcDateTime = Field(sa_type=cast(Any, sqlalchemy.DateTime(timezone=True)))
     contract_id: uuid.UUID = Field(foreign_key="contract.id")
     funding_rate: float  # Decimal format: 0.0001 = 0.01%
 

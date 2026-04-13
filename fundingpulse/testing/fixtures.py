@@ -24,11 +24,6 @@ from fundingpulse.testing.db import (
 from fundingpulse.testing.helpers.data_helpers import create_contract
 
 
-@pytest.fixture(scope="session", autouse=True)
-def set_utc_timezone() -> None:
-    os.environ["TZ"] = "UTC"
-
-
 @pytest.fixture(scope="session")
 def event_loop() -> Iterator[asyncio.AbstractEventLoop]:
     loop = asyncio.get_event_loop_policy().new_event_loop()

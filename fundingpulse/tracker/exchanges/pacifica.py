@@ -6,10 +6,10 @@ _FETCH_STEP = 4000 hours (4000 records, 1-hour interval).
 """
 
 import logging
-from datetime import datetime
 from typing import Any
 
 from fundingpulse.models.contract import Contract
+from fundingpulse.time import from_unix_milliseconds, utc_now
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
 
@@ -92,7 +92,7 @@ class PacificaExchange(BaseExchange):
                     break
 
                 rate = float(raw_record["funding_rate"])
-                timestamp = datetime.fromtimestamp(timestamp_ms / 1000.0)
+                timestamp = from_unix_milliseconds(timestamp_ms)
                 batch_points.append(FundingPoint(rate=rate, timestamp=timestamp))
 
             points.extend(batch_points)
@@ -120,7 +120,7 @@ class PacificaExchange(BaseExchange):
         if not response.get("success") or not response.get("data"):
             return {}
 
-        now = datetime.now()
+        now = utc_now()
         rates = {}
 
         data = response["data"]

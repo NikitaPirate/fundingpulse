@@ -5,9 +5,9 @@ _FETCH_STEP = 100 hours (empirically tested).
 """
 
 import logging
-from datetime import datetime
 
 from fundingpulse.models.contract import Contract
+from fundingpulse.time import from_unix_milliseconds, utc_now
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
 
@@ -85,7 +85,7 @@ class KucoinExchange(BaseExchange):
 
         for raw_record in raw_records:
             rate = float(raw_record["fundingRate"])
-            timestamp = datetime.fromtimestamp(int(raw_record["timepoint"]) / 1000.0)
+            timestamp = from_unix_milliseconds(int(raw_record["timepoint"]))
             points.append(FundingPoint(rate=rate, timestamp=timestamp))
 
         return points
@@ -98,7 +98,7 @@ class KucoinExchange(BaseExchange):
         if response.get("code") != "200000":
             raise RuntimeError(f"KuCoin API error: {response}")
 
-        now = datetime.now()
+        now = utc_now()
         rates = {}
         raw_contracts = response.get("data", [])
 

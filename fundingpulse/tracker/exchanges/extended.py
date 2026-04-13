@@ -16,9 +16,9 @@ _FETCH_STEP = 2160 hours (90 days with 24 records/day = 2160, safely under 4326 
 """
 
 import logging
-from datetime import datetime
 
 from fundingpulse.models.contract import Contract
+from fundingpulse.time import from_unix_milliseconds, utc_now
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
 
@@ -88,7 +88,7 @@ class ExtendedExchange(BaseExchange):
         points = []
         for record in raw_records:
             rate = float(record["f"])
-            timestamp = datetime.fromtimestamp(record["T"] / 1000.0)
+            timestamp = from_unix_milliseconds(record["T"])
             points.append(FundingPoint(rate=rate, timestamp=timestamp))
 
         return points
@@ -102,7 +102,7 @@ class ExtendedExchange(BaseExchange):
 
         markets = response.get("data", [])
 
-        now = datetime.now()
+        now = utc_now()
         rates = {}
 
         for market in markets:

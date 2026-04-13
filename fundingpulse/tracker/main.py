@@ -4,9 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import sys
-import time
 from typing import Any
 
 from dotenv import load_dotenv
@@ -24,13 +22,6 @@ from fundingpulse.tracker.runtime import build_runtime_config
 from fundingpulse.tracker.settings import Settings
 
 logger = logging.getLogger(__name__)
-
-
-def _force_utc_timezone() -> None:
-    """Set process timezone to UTC before scheduler starts."""
-    os.environ["TZ"] = "UTC"
-    if hasattr(time, "tzset"):
-        time.tzset()
 
 
 async def run_scheduler(
@@ -57,7 +48,6 @@ async def run_scheduler(
 
 def main() -> None:
     """Main entrypoint used by CLI and supervisord."""
-    _force_utc_timezone()
     load_dotenv()
 
     args = build_parser().parse_args()

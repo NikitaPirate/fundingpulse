@@ -5,9 +5,9 @@ _FETCH_STEP = 498 hours (500 - 2 safety buffer).
 """
 
 import logging
-from datetime import datetime
 
 from fundingpulse.models.contract import Contract
+from fundingpulse.time import from_unix_milliseconds, utc_now
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
 
@@ -76,7 +76,7 @@ class HyperliquidExchange(BaseExchange):
             assert isinstance(response, list)
             for raw_record in response:
                 rate = float(raw_record["fundingRate"])
-                timestamp = datetime.fromtimestamp(raw_record["time"] / 1000.0)
+                timestamp = from_unix_milliseconds(raw_record["time"])
                 points.append(FundingPoint(rate=rate, timestamp=timestamp))
 
         return points
@@ -104,7 +104,7 @@ class HyperliquidExchange(BaseExchange):
             base_name = full_name.split(":")[-1]
             asset_names[i] = base_name
 
-        now = datetime.now()
+        now = utc_now()
         rates = {}
         for idx, ctx in enumerate(asset_contexts):
             if "funding" in ctx:

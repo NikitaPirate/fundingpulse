@@ -3,12 +3,12 @@
 import asyncio
 import logging
 from abc import ABC, abstractmethod
-from datetime import datetime
 from typing import Any
 
 from httpx import HTTPError
 
 from fundingpulse.models.contract import Contract
+from fundingpulse.time import UtcDateTime, to_unix_milliseconds, utc_now
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
 from fundingpulse.tracker.infrastructure import http_client
 
@@ -98,30 +98,31 @@ class BaseExchange(ABC):
         ...
 
     async def fetch_history_before(
-        self, contract: Contract, before_timestamp: datetime | None
+        self, contract: Contract, before_timestamp: UtcDateTime | None
     ) -> list[FundingPoint]:
         """Fetch funding points before timestamp (backward sync).
 
         Default implementation works for most exchanges using _fetch_history().
         Override if exchange has different pagination/fetching/offset logic.
         """
-        end_ms = int(
-            (before_timestamp.timestamp() if before_timestamp else datetime.now().timestamp())
-            * 1000
+        end_ms = (
+            to_unix_milliseconds(before_timestamp)
+            if before_timestamp
+            else to_unix_milliseconds(utc_now())
         )
         start_ms = end_ms - (self._FETCH_STEP * 3600 * 1000)
         return await self._fetch_history(contract, start_ms, end_ms)
 
     async def fetch_history_after(
-        self, contract: Contract, after_timestamp: datetime
+        self, contract: Contract, after_timestamp: UtcDateTime
     ) -> list[FundingPoint]:
         """Fetch funding points after timestamp (forward sync).
 
         Default implementation works for most exchanges using _fetch_history().
         Override if exchange has different pagination/fetching/offset logic.
         """
-        start_ms = int(after_timestamp.timestamp() * 1000)
-        end_ms = int(datetime.now().timestamp() * 1000)
+        start_ms = to_unix_milliseconds(after_timestamp)
+        end_ms = to_unix_milliseconds(utc_now())
         return await self._fetch_history(contract, start_ms, end_ms)
 
     async def fetch_live(self, contracts: list[Contract]) -> dict[Contract, FundingPoint]:

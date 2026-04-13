@@ -6,9 +6,9 @@ _FETCH_STEP = 720 hours (30 days × 24 hours).
 """
 
 import logging
-from datetime import datetime
 
 from fundingpulse.models.contract import Contract
+from fundingpulse.time import from_unix_milliseconds, utc_now
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
 
@@ -95,7 +95,7 @@ class DeriveExchange(BaseExchange):
         if result and "funding_rate_history" in result:
             for raw_record in result["funding_rate_history"]:
                 rate = float(raw_record["funding_rate"])
-                timestamp = datetime.fromtimestamp(raw_record["timestamp"] / 1000.0)
+                timestamp = from_unix_milliseconds(raw_record["timestamp"])
                 points.append(FundingPoint(rate=rate, timestamp=timestamp))
 
         return points
@@ -115,7 +115,7 @@ class DeriveExchange(BaseExchange):
 
         assert isinstance(response, dict)
 
-        now = datetime.now()
+        now = utc_now()
         rates = {}
         instruments = response.get("result", {}).get("instruments", [])
 

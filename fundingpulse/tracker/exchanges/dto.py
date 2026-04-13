@@ -1,7 +1,8 @@
 """Data Transfer Objects for exchange adapters."""
 
 from dataclasses import dataclass
-from datetime import datetime
+
+from fundingpulse.time import UtcDateTime
 
 
 @dataclass
@@ -15,4 +16,4 @@ class ContractInfo:
 @dataclass
 class FundingPoint:
     rate: float  # Decimal format: 0.0001 = 0.01%
-    timestamp: datetime
+    timestamp: UtcDateTime

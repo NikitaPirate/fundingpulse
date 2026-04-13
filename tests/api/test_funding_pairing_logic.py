@@ -1,5 +1,4 @@
 from collections.abc import Awaitable, Callable
-from datetime import datetime
 
 import pytest
 from sqlalchemy import text
@@ -7,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from fundingpulse.api.queries.funding_data import get_funding_rate_differences
 from fundingpulse.models import Contract, LiveFundingPoint
+from fundingpulse.time import utc_now
 
 ContractFactory = Callable[[str, str, str, int], Awaitable[Contract]]
 # Ensures full DB cleanup before/after each test in this module.
@@ -26,7 +26,7 @@ async def test_no_duplicate_pairs_without_compare_for(
         contract = await contract_factory(asset_name, section, "USDT", 8)
         contracts.append(contract)
         db_session.add(
-            LiveFundingPoint(contract_id=contract.id, funding_rate=0.01, timestamp=datetime.now())
+            LiveFundingPoint(contract_id=contract.id, funding_rate=0.01, timestamp=utc_now())
         )
 
     await db_session.commit()
@@ -73,14 +73,14 @@ async def test_compare_for_section_always_in_contract_1(
         LiveFundingPoint(
             contract_id=compare_contract.id,
             funding_rate=0.01,
-            timestamp=datetime.now(),
+            timestamp=utc_now(),
         )
     )
 
     for section in other_sections:
         contract = await contract_factory(asset_name, section, "USDT", 8)
         db_session.add(
-            LiveFundingPoint(contract_id=contract.id, funding_rate=0.02, timestamp=datetime.now())
+            LiveFundingPoint(contract_id=contract.id, funding_rate=0.02, timestamp=utc_now())
         )
 
     await db_session.commit()

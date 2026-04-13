@@ -5,10 +5,10 @@ _FETCH_STEP = 398 hours (400 - 2 safety buffer).
 """
 
 import logging
-from datetime import datetime
 from typing import Any
 
 from fundingpulse.models.contract import Contract
+from fundingpulse.time import from_unix_milliseconds, utc_now
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
 
@@ -70,7 +70,7 @@ class OkxExchange(BaseExchange):
         if response.get("code") == "0" and response.get("data"):
             for raw_record in response["data"]:
                 rate = float(raw_record["fundingRate"])
-                timestamp = datetime.fromtimestamp(int(raw_record["fundingTime"]) / 1000.0)
+                timestamp = from_unix_milliseconds(int(raw_record["fundingTime"]))
                 points.append(FundingPoint(rate=rate, timestamp=timestamp))
 
         return points
@@ -88,7 +88,7 @@ class OkxExchange(BaseExchange):
             raise ValueError(f"No funding rate data for {symbol}")
 
         record = data[0]
-        now = datetime.now()
+        now = utc_now()
         rate = float(record["fundingRate"])
         return FundingPoint(rate=rate, timestamp=now)
 

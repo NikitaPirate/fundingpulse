@@ -6,19 +6,30 @@ chunked inserts, and edge cases. Uses real TimescaleDB via testcontainers.
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fundingpulse.models.asset import Asset
 from fundingpulse.models.contract import Contract
+from fundingpulse.models.historical_funding_point import HistoricalFundingPoint
+from fundingpulse.models.live_funding_point import LiveFundingPoint
 from fundingpulse.testing.helpers.data_helpers import get_or_create_asset, get_or_create_section
+from fundingpulse.time import utc_now
 from fundingpulse.tracker.db.utils import bulk_insert
 
 
 async def _mk_deps(session: AsyncSession, asset: str, section: str) -> None:
     await get_or_create_asset(session, asset)
     await get_or_create_section(session, section)
+
+
+def _assert_aware_utc_timestamp(value: object) -> None:
+    assert hasattr(value, "tzinfo")
+    assert value.tzinfo is not None
+    assert value.utcoffset() == timedelta(0)
 
 
 @pytest.mark.asyncio
@@ -243,3 +254,72 @@ async def test_partial_duplicates_with_ignore(db_session: AsyncSession) -> None:
     assert by_asset["BTC"].funding_interval == 8  # original preserved
     assert by_asset["ETH"].funding_interval == 8  # untouched
     assert by_asset["SOL"].funding_interval == 1  # new record inserted
+
+
+@pytest.mark.asyncio
+async def test_historical_funding_point_round_trip_keeps_aware_utc(
+    db_session: AsyncSession,
+) -> None:
+    await _mk_deps(db_session, "BTC", "time_ex")
+
+    contract = Contract(
+        asset_name="BTC",
+        section_name="time_ex",
+        quote_name="USDT",
+        funding_interval=8,
+    )
+    await bulk_insert(db_session, Contract, [contract], on_conflict="ignore")
+    await db_session.commit()
+
+    result = await db_session.execute(
+        select(Contract).where(Contract.asset_name == "BTC", Contract.section_name == "time_ex")
+    )
+    persisted_contract = result.scalar_one()
+
+    record = HistoricalFundingPoint(
+        contract_id=persisted_contract.id,
+        timestamp=utc_now(),
+        funding_rate=0.001,
+    )
+    await bulk_insert(db_session, HistoricalFundingPoint, [record], on_conflict="ignore")
+    await db_session.commit()
+
+    result = await db_session.execute(select(HistoricalFundingPoint))
+    persisted_record = result.scalar_one()
+    _assert_aware_utc_timestamp(persisted_record.timestamp)
+
+
+@pytest.mark.asyncio
+async def test_live_funding_point_round_trip_keeps_aware_utc(
+    db_session: AsyncSession,
+) -> None:
+    await _mk_deps(db_session, "ETH", "time_ex_live")
+
+    contract = Contract(
+        asset_name="ETH",
+        section_name="time_ex_live",
+        quote_name="USDT",
+        funding_interval=8,
+    )
+    await bulk_insert(db_session, Contract, [contract], on_conflict="ignore")
+    await db_session.commit()
+
+    result = await db_session.execute(
+        select(Contract).where(
+            Contract.asset_name == "ETH",
+            Contract.section_name == "time_ex_live",
+        )
+    )
+    persisted_contract = result.scalar_one()
+
+    record = LiveFundingPoint(
+        contract_id=persisted_contract.id,
+        timestamp=utc_now(),
+        funding_rate=0.002,
+    )
+    await bulk_insert(db_session, LiveFundingPoint, [record], on_conflict="ignore")
+    await db_session.commit()
+
+    result = await db_session.execute(select(LiveFundingPoint))
+    persisted_record = result.scalar_one()
+    _assert_aware_utc_timestamp(persisted_record.timestamp)

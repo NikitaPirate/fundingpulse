@@ -23,9 +23,9 @@ from premiumIndex.
 
 import asyncio
 import logging
-from datetime import datetime
 
 from fundingpulse.models.contract import Contract
+from fundingpulse.time import from_unix_milliseconds, utc_now
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
 
@@ -200,7 +200,7 @@ class AsterExchange(BaseExchange):
         if raw_records:
             for record in raw_records:
                 rate = float(record["fundingRate"])
-                timestamp = datetime.fromtimestamp(record["fundingTime"] / 1000)
+                timestamp = from_unix_milliseconds(record["fundingTime"])
                 points.append(FundingPoint(rate=rate, timestamp=timestamp))
 
         return points
@@ -210,7 +210,7 @@ class AsterExchange(BaseExchange):
 
         markets = response
         assert isinstance(markets, list), "premiumIndex must return list"
-        now = datetime.now()
+        now = utc_now()
 
         rates = {}
         for market in markets:

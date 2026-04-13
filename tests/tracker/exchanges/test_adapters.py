@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from datetime import datetime
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +18,7 @@ import pytest
 
 from fundingpulse.models.asset import Asset
 from fundingpulse.models.contract import Contract
+from fundingpulse.time import utc_datetime
 from fundingpulse.tracker.exchanges import EXCHANGES
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
@@ -27,8 +28,8 @@ ADAPTER_IDS = sorted(EXCHANGES.keys())
 
 # Fixed timestamps used across all fetch_history tests.
 # Using dates far in the past ensures all adapters have meaningful time windows.
-AFTER_TS = datetime(2024, 1, 1, 0, 0, 0)
-BEFORE_TS = datetime(2024, 1, 2, 0, 0, 0)
+AFTER_TS = utc_datetime(2024, 1, 1)
+BEFORE_TS = utc_datetime(2024, 1, 2)
 
 
 # ---------------------------------------------------------------------------
@@ -68,6 +69,12 @@ def make_adapter(exchange_id: str, state: dict[str, Any] | None = None) -> BaseE
         for key, value in state.items():
             setattr(adapter, key, value)
     return adapter
+
+
+def assert_aware_utc_timestamp(value: object) -> None:
+    assert hasattr(value, "tzinfo")
+    assert value.tzinfo is not None
+    assert value.utcoffset() == timedelta(0)
 
 
 # ---------------------------------------------------------------------------
@@ -150,7 +157,8 @@ async def test_fetch_history(exchange_id: str, mock_http: Callable[..., object])
     assert len(points) >= scenario["expected_count_gte"]
     assert all(isinstance(p, FundingPoint) for p in points)
     assert all(isinstance(p.rate, float) for p in points)
-    assert all(isinstance(p.timestamp, datetime) for p in points)
+    for point in points:
+        assert_aware_utc_timestamp(point.timestamp)
 
 
 @pytest.mark.parametrize("exchange_id", ADAPTER_IDS)
@@ -177,3 +185,5 @@ async def test_fetch_live(
     assert len(result) >= scenario["expected_count_gte"]
     assert all(isinstance(v, FundingPoint) for v in result.values())
     assert all(isinstance(v.rate, float) for v in result.values())
+    for point in result.values():
+        assert_aware_utc_timestamp(point.timestamp)

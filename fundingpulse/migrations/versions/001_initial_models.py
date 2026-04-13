@@ -61,7 +61,7 @@ def upgrade() -> None:
     op.create_index(op.f('ix_contract_id'), 'contract', ['id'], unique=True)
     op.create_index(op.f('ix_contract_quote_name'), 'contract', ['quote_name'], unique=False)
     op.create_table('historical_funding_point',
-    sa.Column('timestamp', sa.DateTime(), nullable=False),
+    sa.Column('timestamp', sa.DateTime(timezone=True), nullable=False),
     sa.Column('contract_id', sa.Uuid(), nullable=False),
     sa.Column('funding_rate', sa.Float(), nullable=False),
     sa.ForeignKeyConstraint(['contract_id'], ['contract.id'], ),
@@ -69,7 +69,7 @@ def upgrade() -> None:
     timescaledb_hypertable={'time_column_name': 'timestamp'}
     )
     op.create_table('live_funding_point',
-    sa.Column('timestamp', sa.DateTime(), nullable=False),
+    sa.Column('timestamp', sa.DateTime(timezone=True), nullable=False),
     sa.Column('contract_id', sa.Uuid(), nullable=False),
     sa.Column('funding_rate', sa.Float(), nullable=False),
     sa.ForeignKeyConstraint(['contract_id'], ['contract.id'], ),

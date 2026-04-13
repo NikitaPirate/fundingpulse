@@ -1,5 +1,5 @@
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 import pytest
 import pytest_asyncio
@@ -14,6 +14,7 @@ from fundingpulse.api.queries.funding_data import (
     get_funding_wall_live_raw,
 )
 from fundingpulse.models import Asset, Contract, HistoricalFundingPoint, LiveFundingPoint
+from fundingpulse.time import to_unix_seconds, utc_datetime, utc_now
 
 ContractFactory = Callable[[str, str, str, int], Awaitable[Contract]]
 # Ensures full DB cleanup before/after each test in this module.
@@ -36,7 +37,7 @@ async def setup_live_data(
     db_session: AsyncSession,
     multi_contract_setup: dict[str, Contract],
 ) -> dict[str, float]:
-    now = datetime.now(UTC)
+    now = utc_now()
     expected: dict[str, float] = {
         "BTC_Binance": 0.001,
         "BTC_OKX": 0.0015,
@@ -88,7 +89,7 @@ async def setup_historical_data(
     db_session: AsyncSession,
     multi_contract_setup: dict[str, Contract],
 ) -> dict[str, list[float]]:
-    base_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
+    base_time = utc_datetime(2024, 1, 1)
     expected_rates: dict[str, list[float]] = {}
 
     btc_binance_rates = [0.001, 0.002, 0.0015]
@@ -203,9 +204,9 @@ async def test_get_funding_wall_historical_raw_basic_functionality(
     multi_contract_setup: dict[str, Contract],
     setup_historical_data: dict[str, list[float]],
 ) -> None:
-    base_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
-    from_ts = int(base_time.timestamp())
-    to_ts = int((base_time + timedelta(days=3)).timestamp())
+    base_time = utc_datetime(2024, 1, 1)
+    from_ts = to_unix_seconds(base_time)
+    to_ts = to_unix_seconds(base_time + timedelta(days=3))
 
     result = await get_funding_wall_historical_raw(
         db_session,
@@ -229,13 +230,13 @@ async def test_get_funding_wall_historical_normalized_basic_functionality(
     multi_contract_setup: dict[str, Contract],
     setup_historical_data: dict[str, list[float]],
 ) -> None:
-    base_time = datetime(2024, 1, 1, 0, 0, 0, tzinfo=UTC)
+    base_time = utc_datetime(2024, 1, 1)
     result = await get_funding_wall_historical_normalized(
         db_session,
         asset_names=["BTC"],
         section_names=["Binance", "OKX"],
-        from_ts=int(base_time.timestamp()),
-        to_ts=int((base_time + timedelta(days=3)).timestamp()),
+        from_ts=to_unix_seconds(base_time),
+        to_ts=to_unix_seconds(base_time + timedelta(days=3)),
         normalize_to_interval=NormalizeToInterval.H1,
     )
 

@@ -7,10 +7,10 @@ _FETCH_STEP = 1000 hours.
 
 import asyncio
 import logging
-from datetime import datetime
 from typing import Any
 
 from fundingpulse.models.contract import Contract
+from fundingpulse.time import from_unix_milliseconds, utc_now
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
 
@@ -76,7 +76,7 @@ class BinanceUsdmExchange(BaseExchange):
         if response:
             for raw_record in response:
                 rate = float(raw_record["fundingRate"])
-                timestamp = datetime.fromtimestamp(raw_record["fundingTime"] / 1000.0)
+                timestamp = from_unix_milliseconds(raw_record["fundingTime"])
                 points.append(FundingPoint(rate=rate, timestamp=timestamp))
 
         return points
@@ -84,7 +84,7 @@ class BinanceUsdmExchange(BaseExchange):
     async def _fetch_live_batch(self) -> dict[str, FundingPoint]:
         response: Any = await self._api_get(f"{self.API_ENDPOINT}/v1/premiumIndex")
 
-        now = datetime.now()
+        now = utc_now()
         rates = {}
         for item in response:
             symbol = item["symbol"]

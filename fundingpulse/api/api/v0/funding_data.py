@@ -1,7 +1,7 @@
 """Funding-data endpoints."""
 
 from collections.abc import Sequence
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -28,13 +28,15 @@ from fundingpulse.api.queries.funding_data import (
     get_historical_funding_differences_avg,
     get_historical_points,
 )
+from fundingpulse.time import to_unix_seconds, utc_now
 
 router = APIRouter(prefix="/funding-data", tags=["funding-data"])
 
 
 def validate_time_range(from_ts: int, to_ts: int) -> tuple[int, int]:
-    now_ts = int(datetime.now().timestamp())
-    one_year_ago_ts = int((datetime.now() - timedelta(days=365)).timestamp())
+    now = utc_now()
+    now_ts = to_unix_seconds(now)
+    one_year_ago_ts = to_unix_seconds(now - timedelta(days=365))
 
     if from_ts < one_year_ago_ts:
         raise HTTPException(

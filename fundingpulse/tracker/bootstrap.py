@@ -11,6 +11,7 @@ from apscheduler.triggers.combining import OrTrigger
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 
+from fundingpulse.time import UTC, utc_now
 from fundingpulse.tracker.db import SessionFactory, setup_db_session
 from fundingpulse.tracker.exchanges import EXCHANGES
 from fundingpulse.tracker.materialized_view_refresher import MaterializedViewRefresher
@@ -87,11 +88,12 @@ def _resolve_exchanges(exchanges: list[str] | None) -> list[str]:
 def _create_scheduler() -> AsyncIOScheduler:
     """Create scheduler with default behavior."""
     return AsyncIOScheduler(
+        timezone=UTC,
         job_defaults={
             "coalesce": True,
             "max_instances": 1,
             "misfire_grace_time": 3600,
-        }
+        },
     )
 
 
@@ -135,8 +137,8 @@ def _register_update_job(
         orchestrator.update,
         trigger=OrTrigger(
             [
-                DateTrigger(),
-                CronTrigger(hour="*", minute=0, second=5),
+                DateTrigger(run_date=utc_now(), timezone=UTC),
+                CronTrigger(hour="*", minute=0, second=5, timezone=UTC),
             ]
         ),
         name=f"{exchange_name}_update",
@@ -152,7 +154,7 @@ def _register_live_job(
 ) -> None:
     scheduler.add_job(
         orchestrator.update_live,
-        trigger=CronTrigger(second=second),
+        trigger=CronTrigger(second=second, timezone=UTC),
         name=f"{exchange_name}_live",
     )
     logger.info(
@@ -168,7 +170,7 @@ def _register_service_jobs(
     """Register process-wide background jobs."""
     scheduler.add_job(
         mv_refresher.check_and_refresh_if_needed,
-        trigger=CronTrigger(second="*"),
+        trigger=CronTrigger(second="*", timezone=UTC),
         name="materialized_views_refresher",
     )
     logger.info("Registered materialized view refresher (every second)")

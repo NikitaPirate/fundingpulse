@@ -107,24 +107,24 @@ def upgrade() -> None:
     with op.get_context().autocommit_block():
         op.execute(sa.text("""
             CALL refresh_continuous_aggregate('lfp_5min',
-                (NOW() - INTERVAL '3 days')::TIMESTAMP,
-                NOW()::TIMESTAMP
+                NOW() - INTERVAL '3 days',
+                NOW()
             );
         """))
 
     with op.get_context().autocommit_block():
         op.execute(sa.text("""
             CALL refresh_continuous_aggregate('lfp_15min',
-                (NOW() - INTERVAL '7 days')::TIMESTAMP,
-                NOW()::TIMESTAMP
+                NOW() - INTERVAL '7 days',
+                NOW()
             );
         """))
 
     with op.get_context().autocommit_block():
         op.execute(sa.text("""
             CALL refresh_continuous_aggregate('lfp_1hour',
-                (NOW() - INTERVAL '30 days')::TIMESTAMP,
-                NOW()::TIMESTAMP
+                NOW() - INTERVAL '30 days',
+                NOW()
             );
         """))
 

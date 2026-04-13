@@ -8,10 +8,10 @@ Live rates use batch API: single /v5/market/tickers request fetches all contract
 """
 
 import logging
-from datetime import datetime
 from typing import Any
 
 from fundingpulse.models.contract import Contract
+from fundingpulse.time import from_unix_milliseconds, utc_now
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
 
@@ -86,9 +86,7 @@ class BybitExchange(BaseExchange):
         if raw_records:
             for raw_record in raw_records:
                 rate = float(raw_record["fundingRate"])
-                timestamp = datetime.fromtimestamp(
-                    int(raw_record["fundingRateTimestamp"]) / 1000.0
-                )
+                timestamp = from_unix_milliseconds(int(raw_record["fundingRateTimestamp"]))
                 points.append(FundingPoint(rate=rate, timestamp=timestamp))
 
         return points
@@ -99,7 +97,7 @@ class BybitExchange(BaseExchange):
             params={"category": "linear"},
         )
 
-        now = datetime.now()
+        now = utc_now()
         rates = {}
 
         for record in response["result"]["list"]:

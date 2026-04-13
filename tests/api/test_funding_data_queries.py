@@ -1,5 +1,5 @@
 from collections.abc import Awaitable, Callable
-from datetime import datetime, timedelta
+from datetime import timedelta
 from uuid import UUID
 
 import pytest
@@ -14,6 +14,7 @@ from fundingpulse.api.queries.funding_data import (
     get_historical_funding_differences_avg,
 )
 from fundingpulse.models import Contract, HistoricalFundingPoint, LiveFundingPoint
+from fundingpulse.time import to_unix_seconds, utc_datetime, utc_now
 
 ContractFactory = Callable[[str, str, str, int], Awaitable[Contract]]
 # Ensures full DB cleanup before/after each test in this module.
@@ -22,7 +23,7 @@ pytestmark = pytest.mark.usefixtures("db_cleanup_for_query_tests")
 
 def generate_live_funding_points(contract_id: UUID) -> list[LiveFundingPoint]:
     points: list[LiveFundingPoint] = []
-    now = datetime.now()
+    now = utc_now()
     total_minutes = 3 * 24 * 60
     for i in range(total_minutes):
         points.append(
@@ -78,7 +79,7 @@ async def test_get_aggregated_live_points(
             text("CALL refresh_continuous_aggregate('lfp_1hour', NULL, NULL);")
         )
 
-    now_ts = int(datetime.now().timestamp())
+    now_ts = to_unix_seconds(utc_now())
     result = await get_aggregated_live_points(
         db_session,
         contract_id=contract.id,
@@ -122,7 +123,7 @@ async def test_get_aggregated_live_points_with_normalization(
     raw_rate = 0.0123
     db_session.add(
         LiveFundingPoint(
-            timestamp=datetime.now() - timedelta(minutes=30),
+            timestamp=utc_now() - timedelta(minutes=30),
             contract_id=contract.id,
             funding_rate=raw_rate,
         )
@@ -132,8 +133,8 @@ async def test_get_aggregated_live_points_with_normalization(
     result = await get_aggregated_live_points(
         db_session,
         contract_id=contract.id,
-        from_ts=int((datetime.now() - timedelta(days=1)).timestamp()),
-        to_ts=int(datetime.now().timestamp()),
+        from_ts=to_unix_seconds(utc_now() - timedelta(days=1)),
+        to_ts=to_unix_seconds(utc_now()),
         normalize_to_interval=target_interval,
     )
 
@@ -154,7 +155,7 @@ async def test_get_funding_rate_differences_basic_scenario(
     contract_b = await contract_factory(asset_name, section_b, quote_name, 8)
     contract_c = await contract_factory(asset_name, section_c, quote_name, 1)
 
-    now = datetime.now()
+    now = utc_now()
     db_session.add_all(
         [
             LiveFundingPoint(contract_id=contract_a.id, funding_rate=0.01, timestamp=now),
@@ -190,7 +191,7 @@ async def test_get_cumulative_funding_differences_basic_scenario(
     contract_8h = await contract_factory(asset_name, section_a, "USDT", 8)
     contract_1h = await contract_factory(asset_name, section_b, "USDT", 1)
 
-    base_dt = datetime(2024, 1, 1, 0, 0, 0)
+    base_dt = utc_datetime(2024, 1, 1)
     funding_points: list[HistoricalFundingPoint] = []
 
     for i in range(24):
@@ -221,16 +222,16 @@ async def test_get_cumulative_funding_differences_basic_scenario(
 
     result = await get_cumulative_funding_differences(
         db_session,
-        from_ts=int((base_dt + timedelta(hours=1)).timestamp()),
-        to_ts=int((base_dt + timedelta(hours=23)).timestamp()),
+        from_ts=to_unix_seconds(base_dt + timedelta(hours=1)),
+        to_ts=to_unix_seconds(base_dt + timedelta(hours=23)),
         asset_names=[asset_name],
     )
 
     assert len(result.data) == 1
     assert result.total_count == 1
     res = result.data[0]
-    assert res.aligned_from == int(base_dt.timestamp())
-    assert res.aligned_to == int((base_dt + timedelta(hours=16)).timestamp())
+    assert res.aligned_from == to_unix_seconds(base_dt)
+    assert res.aligned_to == to_unix_seconds(base_dt + timedelta(hours=16))
 
 
 @pytest.mark.asyncio
@@ -248,7 +249,7 @@ async def test_get_funding_rate_differences_with_min_diff(
         await contract_factory(asset_name, "ExchangeD", quote_name, 8),
     ]
 
-    now = datetime.now()
+    now = utc_now()
     db_session.add_all(
         [
             LiveFundingPoint(contract_id=contracts[0].id, funding_rate=0.01, timestamp=now),
@@ -291,8 +292,8 @@ async def test_get_historical_funding_differences_avg_with_normalization(
     contract_b = await contract_factory(asset_name, "ExchangeB_AVG", "USDT", 4)
     contract_c = await contract_factory(asset_name, "ExchangeC_AVG", "USDT", 8)
 
-    from_time = datetime(2024, 1, 1, 0, 0)
-    to_time = datetime(2024, 1, 1, 23, 59)
+    from_time = utc_datetime(2024, 1, 1)
+    to_time = utc_datetime(2024, 1, 1, 23, 59)
 
     funding_records: list[HistoricalFundingPoint] = []
     for i in range(3):
@@ -328,8 +329,8 @@ async def test_get_historical_funding_differences_avg_with_normalization(
 
     result_normalized = await get_historical_funding_differences_avg(
         db_session,
-        from_ts=int(from_time.timestamp()),
-        to_ts=int(to_time.timestamp()),
+        from_ts=to_unix_seconds(from_time),
+        to_ts=to_unix_seconds(to_time),
         normalize_to_interval=NormalizeToInterval.D1,
         asset_names=[asset_name],
     )
@@ -338,8 +339,8 @@ async def test_get_historical_funding_differences_avg_with_normalization(
 
     result_filtered = await get_historical_funding_differences_avg(
         db_session,
-        from_ts=int(from_time.timestamp()),
-        to_ts=int(to_time.timestamp()),
+        from_ts=to_unix_seconds(from_time),
+        to_ts=to_unix_seconds(to_time),
         normalize_to_interval=NormalizeToInterval.D1,
         asset_names=[asset_name],
         min_diff=0.01,
@@ -349,8 +350,8 @@ async def test_get_historical_funding_differences_avg_with_normalization(
     with pytest.raises(ValueError, match="RAW normalization is not supported"):
         await get_historical_funding_differences_avg(
             db_session,
-            from_ts=int(from_time.timestamp()),
-            to_ts=int(to_time.timestamp()),
+            from_ts=to_unix_seconds(from_time),
+            to_ts=to_unix_seconds(to_time),
             normalize_to_interval=NormalizeToInterval.RAW,
             asset_names=[asset_name],
         )

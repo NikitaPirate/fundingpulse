@@ -33,9 +33,16 @@ _FETCH_STEP = 6 hours = 4320 records (5000 limit - safety buffer).
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from fundingpulse.models.contract import Contract
+from fundingpulse.time import (
+    UtcDateTime,
+    from_unix_milliseconds,
+    start_of_hour,
+    to_unix_milliseconds,
+    utc_now,
+)
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
 
@@ -92,7 +99,7 @@ class ParadexExchange(BaseExchange):
         return contracts
 
     async def fetch_history_before(
-        self, contract: Contract, before_timestamp: datetime | None
+        self, contract: Contract, before_timestamp: UtcDateTime | None
     ) -> list[FundingPoint]:
         """Fetch historical funding points before timestamp.
 
@@ -108,14 +115,14 @@ class ParadexExchange(BaseExchange):
         Returns:
             List of hourly FundingPoint objects in chronological order
         """
-        end_time = before_timestamp or datetime.now()
+        end_time = before_timestamp or utc_now()
 
         # Round down to hour boundary for clean hour alignment
-        end_time = end_time.replace(minute=0, second=0, microsecond=0)
+        end_time = start_of_hour(end_time)
         start_time = end_time - timedelta(hours=self._FETCH_STEP)
 
-        start_ms = int(start_time.timestamp() * 1000)
-        end_ms = int(end_time.timestamp() * 1000)
+        start_ms = to_unix_milliseconds(start_time)
+        end_ms = to_unix_milliseconds(end_time)
 
         symbol = self._format_symbol(contract)
 
@@ -154,7 +161,7 @@ class ParadexExchange(BaseExchange):
         return hourly_points
 
     async def fetch_history_after(
-        self, contract: Contract, after_timestamp: datetime
+        self, contract: Contract, after_timestamp: UtcDateTime
     ) -> list[FundingPoint]:
         """Fetch funding points after timestamp using live cache optimization.
 
@@ -175,13 +182,13 @@ class ParadexExchange(BaseExchange):
         Returns:
             List of hourly FundingPoint objects in chronological order
         """
-        now = datetime.now()
+        now = utc_now()
         start = after_timestamp
         contract_id = str(contract.id)
 
         # Align to hour boundaries
-        start = start.replace(minute=0, second=0, microsecond=0)
-        now = now.replace(minute=0, second=0, microsecond=0)
+        start = start_of_hour(start)
+        now = start_of_hour(now)
 
         # Generate list of hours to fetch
         hours_to_fetch = []
@@ -198,7 +205,7 @@ class ParadexExchange(BaseExchange):
 
         for hour_end in hours_to_fetch:
             hour_start = hour_end - timedelta(hours=1)
-            hour_start_ms = int(hour_start.timestamp() * 1000)
+            hour_start_ms = to_unix_milliseconds(hour_start)
 
             # Check live cache and remove entry (pop) - cache auto-cleans when used
             cached_rates = self._live_cache.get(contract_id, {}).pop(hour_start_ms, None)
@@ -216,7 +223,7 @@ class ParadexExchange(BaseExchange):
                 )
             else:
                 # Fetch from API
-                hour_end_ms = int(hour_end.timestamp() * 1000)
+                hour_end_ms = to_unix_milliseconds(hour_end)
 
                 response = await self._api_get(
                     f"{self.API_ENDPOINT}/funding/data",
@@ -274,11 +281,8 @@ class ParadexExchange(BaseExchange):
             rate = float(record["funding_rate"])
 
             # Find hour boundary (end of hour)
-            hour_end_dt = datetime.fromtimestamp(created_at_ms / 1000)
-            hour_end_dt = hour_end_dt.replace(minute=0, second=0, microsecond=0) + timedelta(
-                hours=1
-            )
-            hour_end_ms = int(hour_end_dt.timestamp() * 1000)
+            hour_end_dt = start_of_hour(from_unix_milliseconds(created_at_ms)) + timedelta(hours=1)
+            hour_end_ms = to_unix_milliseconds(hour_end_dt)
 
             if hour_end_ms not in hourly_groups:
                 hourly_groups[hour_end_ms] = []
@@ -291,7 +295,7 @@ class ParadexExchange(BaseExchange):
             avg_rate = sum(rates) / len(rates)
             hourly_rate = avg_rate / 8  # Convert 8-hour period to hourly
 
-            hour_end_dt = datetime.fromtimestamp(hour_end_ms / 1000)
+            hour_end_dt = from_unix_milliseconds(hour_end_ms)
             points.append(FundingPoint(rate=hourly_rate, timestamp=hour_end_dt))
 
         return points
@@ -339,9 +343,9 @@ class ParadexExchange(BaseExchange):
         raw_rate = float(record["funding_rate"])
 
         # Store in live cache for fetch_after optimization
-        now = datetime.now()
-        hour_start = now.replace(minute=0, second=0, microsecond=0)
-        hour_start_ms = int(hour_start.timestamp() * 1000)
+        now = utc_now()
+        hour_start = start_of_hour(now)
+        hour_start_ms = to_unix_milliseconds(hour_start)
 
         if contract_id not in self._live_cache:
             self._live_cache[contract_id] = {}

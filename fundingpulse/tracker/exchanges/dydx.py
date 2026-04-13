@@ -5,9 +5,9 @@ _FETCH_STEP = 1000 hours (1000 records at 1-hour interval).
 """
 
 import logging
-from datetime import datetime
 
 from fundingpulse.models.contract import Contract
+from fundingpulse.time import from_unix_milliseconds, from_utc_iso8601, to_iso8601, utc_now
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
 
@@ -57,7 +57,7 @@ class DydxExchange(BaseExchange):
         symbol = self._format_symbol(contract)
 
         # dYdX uses ISO8601 format, not milliseconds
-        end_time_iso = datetime.fromtimestamp(end_ms / 1000).isoformat()
+        end_time_iso = to_iso8601(from_unix_milliseconds(end_ms))
 
         response = await self._api_get(
             f"{self.API_ENDPOINT}/historicalFunding/{symbol}",
@@ -75,7 +75,7 @@ class DydxExchange(BaseExchange):
         if raw_records:
             for raw_record in raw_records:
                 rate = float(raw_record["rate"])
-                timestamp = datetime.fromisoformat(raw_record["effectiveAt"])
+                timestamp = from_utc_iso8601(raw_record["effectiveAt"])
                 points.append(FundingPoint(rate=rate, timestamp=timestamp))
 
         return points
@@ -88,7 +88,7 @@ class DydxExchange(BaseExchange):
 
         assert isinstance(response, dict)
 
-        now = datetime.now()
+        now = utc_now()
         rates = {}
         markets = response.get("markets", {})
 

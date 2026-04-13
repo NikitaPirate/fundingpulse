@@ -3,13 +3,14 @@
 import argparse
 import asyncio
 import sys
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from rich.console import Console
 from rich.table import Table
 
 from fundingpulse.models.asset import Asset
 from fundingpulse.models.contract import Contract
+from fundingpulse.time import utc_now
 from fundingpulse.tracker.exchanges import EXCHANGES
 from fundingpulse.tracker.exchanges.dto import ContractInfo
 
@@ -137,7 +138,7 @@ async def verify_exchange(
         f"for [cyan]{contract_label}[/cyan]"
     )
     try:
-        after_ts = datetime.now() - timedelta(days=history_days)
+        after_ts = utc_now() - timedelta(days=history_days)
         history = await adapter.fetch_history_after(contract, after_ts)
         console.print(f"  [green][OK][/green] Retrieved {len(history)} funding points")
 

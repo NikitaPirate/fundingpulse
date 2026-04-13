@@ -1,7 +1,6 @@
 """Queries for funding data endpoints."""
 
 from collections.abc import Mapping, Sequence
-from datetime import UTC, datetime
 from typing import Any
 from uuid import UUID
 
@@ -20,6 +19,7 @@ from fundingpulse.api.dto.funding_data import (
     PaginatedFundingRateDifference,
 )
 from fundingpulse.api.queries.funding_sql_composer import FundingQueryComposer
+from fundingpulse.time import from_unix_seconds, to_unix_seconds, utc_now
 
 
 def _paginate_funding_rate(
@@ -294,8 +294,8 @@ async def get_cumulative_funding_differences(
         text(query_sql),
         {
             **processed.to_dict(),
-            "from_time": datetime.fromtimestamp(from_ts),
-            "to_time": datetime.fromtimestamp(to_ts),
+            "from_time": from_unix_seconds(from_ts),
+            "to_time": from_unix_seconds(to_ts),
             "buffer_minutes": buffer_minutes,
             "min_diff": min_diff if min_diff is not None else -1.0,
             "offset": offset,
@@ -336,8 +336,8 @@ async def get_historical_funding_differences_avg(
         text(query_sql),
         {
             **processed.to_dict(),
-            "start_date": datetime.fromtimestamp(from_ts),
-            "end_date": datetime.fromtimestamp(to_ts),
+            "start_date": from_unix_seconds(from_ts),
+            "end_date": from_unix_seconds(to_ts),
             "from_ts": from_ts,
             "to_ts": to_ts,
             "target_hours": FundingQueryComposer.calculate_target_hours(normalize_to_interval),
@@ -362,7 +362,7 @@ async def get_funding_wall_live_raw(
     rows = list(result.mappings())
     if not rows:
         return FundingWallResponse(
-            timestamp=int(datetime.now(UTC).timestamp()),
+            timestamp=to_unix_seconds(utc_now()),
             assets=[],
             exchanges=section_names,
         )
@@ -407,7 +407,7 @@ async def get_funding_wall_live_normalized(
     rows = list(result.mappings())
     if not rows:
         return FundingWallResponse(
-            timestamp=int(datetime.now(UTC).timestamp()),
+            timestamp=to_unix_seconds(utc_now()),
             assets=[],
             exchanges=section_names,
         )
@@ -446,8 +446,8 @@ async def get_funding_wall_historical_raw(
         {
             "asset_names": asset_names,
             "section_names": section_names,
-            "start_date": datetime.fromtimestamp(from_ts),
-            "end_date": datetime.fromtimestamp(to_ts),
+            "start_date": from_unix_seconds(from_ts),
+            "end_date": from_unix_seconds(to_ts),
             "to_ts": to_ts,
         },
     )
@@ -488,8 +488,8 @@ async def get_funding_wall_historical_normalized(
         {
             "asset_names": asset_names,
             "section_names": section_names,
-            "start_date": datetime.fromtimestamp(from_ts),
-            "end_date": datetime.fromtimestamp(to_ts),
+            "start_date": from_unix_seconds(from_ts),
+            "end_date": from_unix_seconds(to_ts),
             "target_hours": FundingQueryComposer.calculate_target_hours(normalize_to_interval),
             "to_ts": to_ts,
             "is_raw": normalize_to_interval == NormalizeToInterval.RAW,

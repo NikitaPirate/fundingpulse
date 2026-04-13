@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from collections.abc import Sequence
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from fundingpulse.models.asset import Asset
@@ -12,6 +12,7 @@ from fundingpulse.models.historical_funding_point import HistoricalFundingPoint
 from fundingpulse.models.live_funding_point import LiveFundingPoint
 from fundingpulse.models.quote import Quote
 from fundingpulse.models.section import Section
+from fundingpulse.time import UtcDateTime, utc_now
 from fundingpulse.tracker.db import SessionFactory
 from fundingpulse.tracker.db.contracts import get_active_by_section, get_by_section, upsert_many
 from fundingpulse.tracker.db.funding_points import get_newest_for_contract, get_oldest_for_contract
@@ -53,7 +54,7 @@ class ExchangeOrchestrator:
 
     async def update(self) -> None:
         """Register contracts, then sync/update history for each."""
-        start_time = datetime.now()
+        start_time = utc_now()
         logger.info(f"Starting update for {self._section_name}")
 
         try:
@@ -70,7 +71,7 @@ class ExchangeOrchestrator:
 
         if not contracts:
             logger.warning(f"No contracts found for {self._section_name}")
-            duration = datetime.now() - start_time
+            duration = utc_now() - start_time
             logger.info(
                 f"Update completed for {self._section_name} in {duration} "
                 f"(no contracts to process)"
@@ -352,7 +353,7 @@ class ExchangeOrchestrator:
             )
             return 0
 
-        now = datetime.now()
+        now = utc_now()
         time_since_last = now - after_timestamp
         required_interval = timedelta(hours=contract.funding_interval)
 
@@ -393,12 +394,12 @@ class ExchangeOrchestrator:
         self,
         contracts: Sequence[Contract],
         results: list[tuple[int, int]],
-        start_time: datetime,
+        start_time: UtcDateTime,
     ) -> None:
         """Aggregate and log statistics from contract processing."""
         updated_count = sum(r[0] for r in results)
         total_points = sum(r[1] for r in results)
-        duration = datetime.now() - start_time
+        duration = utc_now() - start_time
         logger.info(
             f"History update for {self._section_name}: "
             f"{updated_count} contracts updated ({total_points} new points), "

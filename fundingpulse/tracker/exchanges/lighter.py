@@ -7,11 +7,11 @@ _FETCH_STEP = 498 hours (500 - 2 safety buffer).
 import asyncio
 import json
 import logging
-from datetime import datetime
 
 import websockets
 
 from fundingpulse.models.contract import Contract
+from fundingpulse.time import from_unix_seconds, utc_now
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
 
@@ -85,7 +85,7 @@ class LighterExchange(BaseExchange):
             rate = float(raw_record["rate"]) / 100
             if raw_record["direction"] == "short":
                 rate = -rate
-            timestamp = datetime.fromtimestamp(raw_record["timestamp"])
+            timestamp = from_unix_seconds(raw_record["timestamp"])
             points.append(FundingPoint(rate=rate, timestamp=timestamp))
 
         return points
@@ -96,7 +96,7 @@ class LighterExchange(BaseExchange):
             await ws.recv()  # skip "connected" ack
             data = json.loads(await ws.recv())
 
-        now = datetime.now()
+        now = utc_now()
         return {
             market_id: FundingPoint(
                 rate=float(payload["current_funding_rate"]) / 100, timestamp=now
