@@ -1,0 +1,215 @@
+.page {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: var(--space-sm);
+  min-height: calc(100vh - var(--nav-height) - (var(--space-sm) * 2));
+}
+
+.header {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(24rem, 0.9fr);
+  gap: var(--space-lg);
+  align-items: end;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.heading {
+  display: grid;
+  gap: 0;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 2vw, 2.3rem);
+  line-height: 1;
+}
+
+.headerStack,
+.workspace {
+  display: grid;
+  gap: 0;
+}
+
+.headerStack {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.statusCell {
+  display: grid;
+  align-content: center;
+  gap: var(--space-xs);
+  min-height: 4.75rem;
+  padding: var(--space-md);
+  border-left: var(--border-width) solid var(--color-border);
+}
+
+.statusLabel {
+  color: var(--color-text-soft);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.statusValue {
+  color: var(--color-text);
+  font-size: 0.92rem;
+}
+
+.workspace {
+  grid-template-rows: auto 1fr;
+  min-height: 0;
+  gap: var(--space-sm);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.sectionTitle {
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.controls {
+  display: grid;
+  gap: var(--space-sm);
+  padding: 0 0 var(--space-sm);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.controlGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-xs);
+}
+
+.controlSlot {
+  display: flex;
+  align-items: center;
+  min-height: 3rem;
+  min-width: 0;
+  padding: 0 var(--space-sm);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  background: transparent;
+}
+
+.tableZone {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-width: 0;
+  min-height: 0;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: var(--space-xs);
+}
+
+.legend span {
+  padding: var(--space-xs) var(--space-sm);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: 0.74rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tableShell {
+  overflow: hidden;
+}
+
+.tableHead,
+.tableRow {
+  display: grid;
+  grid-template-columns: 1.3fr 0.8fr 1fr 1fr 1fr 1fr;
+  gap: var(--space-md);
+  align-items: center;
+}
+
+.tableHead {
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: var(--border-width) solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.tableBody {
+  display: grid;
+}
+
+.tableRow {
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.cellBar {
+  display: block;
+  width: 100%;
+  height: 0.55rem;
+  background: linear-gradient(90deg, var(--color-placeholder-strong), transparent 78%);
+}
+
+@media (max-width: 900px) {
+  .header {
+    grid-template-columns: 1fr;
+  }
+
+  .headerStack {
+    grid-template-columns: 1fr;
+  }
+
+  .statusCell {
+    border-left: none;
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .sectionHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .headerStack,
+  .legend {
+    justify-content: flex-start;
+  }
+
+  .controlGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .tableShell {
+    overflow-x: auto;
+  }
+
+  .tableHead,
+  .tableRow {
+    min-width: 42rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .page {
+    gap: var(--space-xs);
+  }
+
+  .header {
+    padding: var(--space-sm);
+  }
+}
