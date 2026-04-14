@@ -1,0 +1,223 @@
+.page {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  gap: var(--space-sm);
+  min-height: calc(100vh - var(--nav-height) - (var(--space-sm) * 2));
+}
+
+.header {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(24rem, 0.9fr);
+  gap: var(--space-lg);
+  align-items: end;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.heading {
+  display: grid;
+  gap: 0;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 2vw, 2.3rem);
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.headerLabel {
+  color: var(--color-text-soft);
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.headerValue {
+  font-size: 0.92rem;
+}
+
+.workspace {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 0;
+  gap: var(--space-sm);
+}
+
+.statusStrip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0;
+}
+
+.statusCell {
+  display: grid;
+  align-content: center;
+  gap: var(--space-xs);
+  min-height: 4.75rem;
+  padding: var(--space-md);
+  border-left: var(--border-width) solid var(--color-border);
+}
+
+.controlStrip,
+.surface {
+  min-width: 0;
+}
+
+.controlStrip {
+  display: grid;
+  gap: var(--space-sm);
+  padding: 0 0 var(--space-sm);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.stripHeader,
+.workspaceHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.bandTitle {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.slotRow {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: var(--space-xs);
+}
+
+.slot {
+  display: flex;
+  align-items: center;
+  min-height: 3rem;
+  min-width: 0;
+  padding: 0 var(--space-sm);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  background: transparent;
+}
+
+.workspacePills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: end;
+  gap: var(--space-xs);
+}
+
+.workspacePills span {
+  padding: var(--space-xs) var(--space-sm);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: 0.74rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.surface {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  min-height: 0;
+}
+
+.tableShell {
+  overflow: hidden;
+  min-width: 0;
+}
+
+.tableHead,
+.tableRow {
+  display: grid;
+  grid-template-columns: 0.8fr 1.4fr 1.4fr 1fr 1fr;
+  gap: var(--space-md);
+  align-items: center;
+}
+
+.tableHead {
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: var(--border-width) solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.tableBody {
+  display: grid;
+}
+
+.tableRow {
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.cellBar {
+  display: block;
+  width: 100%;
+  height: 0.55rem;
+  background: linear-gradient(90deg, var(--color-placeholder-strong), transparent 78%);
+}
+
+@media (max-width: 1024px) {
+  .header {
+    grid-template-columns: 1fr;
+  }
+
+  .statusStrip {
+    grid-template-columns: 1fr;
+  }
+
+  .statusCell {
+    border-left: none;
+    border-top: var(--border-width) solid var(--color-border);
+  }
+
+  .slotRow {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 800px) {
+  .workspaceHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .workspacePills {
+    justify-content: flex-start;
+  }
+
+  .tableShell {
+    overflow-x: auto;
+  }
+
+  .tableHead,
+  .tableRow {
+    min-width: 46rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .page {
+    gap: var(--space-xs);
+  }
+
+  .header {
+    padding: var(--space-sm);
+  }
+
+  .slotRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

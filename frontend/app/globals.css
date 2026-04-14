@@ -1,0 +1,167 @@
+:root {
+  --font-ui: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+  --font-display: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", "SF Mono", Consolas, "Liberation Mono", monospace;
+  --space-2xs: 0.25rem;
+  --space-xs: 0.5rem;
+  --space-sm: 0.75rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  --space-3xl: 4.5rem;
+  --radius-sm: 0.4rem;
+  --radius-md: 0.6rem;
+  --radius-lg: 0.9rem;
+  --radius-pill: 999px;
+  --border-width: 1px;
+  --shadow-soft: 0 20px 48px rgba(5, 10, 18, 0.14);
+  --shadow-strong: 0 24px 64px rgba(4, 9, 18, 0.18);
+  --page-max-width: 128rem;
+  --nav-height: 4rem;
+  --z-base: 1;
+  --z-nav: 20;
+}
+
+html {
+  min-height: 100%;
+  color-scheme: dark;
+  background: #09111c;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --color-background: #060b11;
+  --color-background-accent: rgba(45, 111, 151, 0.11);
+  --color-canvas: rgba(7, 12, 19, 0.94);
+  --color-surface: rgba(10, 16, 24, 0.88);
+  --color-surface-strong: rgba(12, 18, 27, 0.98);
+  --color-surface-muted: rgba(16, 25, 36, 0.9);
+  --color-border: rgba(123, 151, 176, 0.16);
+  --color-border-strong: rgba(123, 151, 176, 0.3);
+  --color-text: #edf3f8;
+  --color-text-muted: #a2b4c4;
+  --color-text-soft: #6f8294;
+  --color-accent: #8ad8ff;
+  --color-accent-strong: #d7f3ff;
+  --color-panel-line: rgba(138, 216, 255, 0.24);
+  --color-placeholder: rgba(114, 132, 151, 0.2);
+  --color-placeholder-strong: rgba(206, 220, 234, 0.42);
+  --color-page-top-wash: rgba(6, 11, 17, 0.18);
+  --color-nav-hover: rgba(16, 25, 36, 0.88);
+  --color-nav-active: rgba(19, 31, 44, 0.96);
+  --color-toggle-bg: rgba(16, 25, 36, 0.92);
+  --color-toggle-thumb: rgba(138, 216, 255, 0.18);
+  --color-grid-line: rgba(127, 152, 176, 0.03);
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+  --color-background: #f7f9fb;
+  --color-background-accent: rgba(104, 149, 179, 0.035);
+  --color-canvas: rgba(252, 253, 254, 0.94);
+  --color-surface: rgba(255, 255, 255, 0.62);
+  --color-surface-strong: rgba(255, 255, 255, 0.92);
+  --color-surface-muted: rgba(247, 249, 251, 0.88);
+  --color-border: rgba(72, 92, 111, 0.1);
+  --color-border-strong: rgba(72, 92, 111, 0.18);
+  --color-text: #142231;
+  --color-text-muted: #4f6274;
+  --color-text-soft: #7c8d9e;
+  --color-accent: #1277a8;
+  --color-accent-strong: #0d5d84;
+  --color-panel-line: rgba(18, 119, 168, 0.18);
+  --color-placeholder: rgba(120, 136, 149, 0.1);
+  --color-placeholder-strong: rgba(120, 136, 149, 0.24);
+  --color-page-top-wash: rgba(255, 255, 255, 0.72);
+  --color-nav-hover: rgba(255, 255, 255, 0.34);
+  --color-nav-active: rgba(255, 255, 255, 0.42);
+  --color-toggle-bg: rgba(255, 255, 255, 0.48);
+  --color-toggle-thumb: rgba(18, 119, 168, 0.12);
+  --color-grid-line: rgba(127, 152, 176, 0.018);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  font-family: var(--font-ui);
+  color: var(--color-text);
+  background:
+    radial-gradient(circle at top left, var(--color-background-accent), transparent 18%),
+    linear-gradient(180deg, var(--color-page-top-wash), transparent 8rem),
+    var(--color-background);
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+body::before {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(to right, var(--color-grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-grid-line) 1px, transparent 1px);
+  background-size: 4.5rem 4.5rem;
+  content: "";
+  pointer-events: none;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 1), transparent 86%);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+a,
+button {
+  outline: none;
+}
+
+a:focus-visible,
+button:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--color-accent), 0 0 0 1px var(--color-accent);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+main {
+  display: block;
+}
+
+.skipLink {
+  position: fixed;
+  top: var(--space-sm);
+  left: var(--space-sm);
+  z-index: 100;
+  padding: var(--space-xs) var(--space-sm);
+  border: var(--border-width) solid var(--color-border-strong);
+  background: var(--color-surface-strong);
+  color: var(--color-text);
+  transform: translateY(-140%);
+  transition: transform 160ms ease;
+}
+
+.skipLink:focus-visible {
+  transform: translateY(0);
+}
+
+::selection {
+  background: rgba(102, 208, 255, 0.24);
+}
