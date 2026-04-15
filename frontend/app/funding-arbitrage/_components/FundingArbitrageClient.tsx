@@ -51,17 +51,6 @@ type DataState = {
   settledKey: string | null;
 };
 
-function statusCells(
-  response: FundingArbitrageResponse | null,
-  filters: FundingArbitrageFilters,
-) {
-  return [
-    ["Mode", filters.period.type === "live" ? "Pair scan" : "Historical scan"],
-    ["Normalization", filters.normalize],
-    ["Rows", response ? String(response.totalCount) : "…"],
-  ] as const;
-}
-
 export function FundingArbitrageClient() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -180,15 +169,6 @@ export function FundingArbitrageClient() {
           <p className={styles.subtitle}>
             Ranked delta-neutral opportunities across exchanges, quotes, and funding regimes.
           </p>
-        </div>
-
-        <div className={styles.statusStrip}>
-          {statusCells(response, filters).map(([label, value]) => (
-            <div className={styles.statusCell} key={label}>
-              <span className={styles.headerLabel}>{label}</span>
-              <span className={styles.headerValue}>{value}</span>
-            </div>
-          ))}
         </div>
       </header>
 

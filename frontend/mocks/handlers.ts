@@ -1,6 +1,11 @@
 import { http, HttpResponse } from "msw";
 
-import { apiUrl, defaultFundingArbitrageFixtures } from "./fundingArbitrage";
+import {
+  apiUrl,
+  buildHistoricalDifferencesFixture,
+  buildLiveDifferencesFixture,
+  defaultFundingArbitrageFixtures,
+} from "./fundingArbitrage";
 
 export const handlers = [
   http.get(apiUrl("/api/v0/meta/assets"), () =>
@@ -12,10 +17,10 @@ export const handlers = [
   http.get(apiUrl("/api/v0/meta/quotes"), () =>
     HttpResponse.json(defaultFundingArbitrageFixtures.quotes),
   ),
-  http.get(apiUrl("/api/v0/funding-data/diff/live_differences"), () =>
-    HttpResponse.json(defaultFundingArbitrageFixtures.live),
+  http.get(apiUrl("/api/v0/funding-data/diff/live_differences"), ({ request }) =>
+    HttpResponse.json(buildLiveDifferencesFixture(new URL(request.url).searchParams)),
   ),
-  http.get(apiUrl("/api/v0/funding-data/diff/historical_differences"), () =>
-    HttpResponse.json(defaultFundingArbitrageFixtures.historical),
+  http.get(apiUrl("/api/v0/funding-data/diff/historical_differences"), ({ request }) =>
+    HttpResponse.json(buildHistoricalDifferencesFixture(new URL(request.url).searchParams)),
   ),
 ];
