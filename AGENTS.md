@@ -4,12 +4,13 @@ Crypto perpetual futures funding rate tracker. Collects historical and live fund
 
 ## Architecture
 
-Two independent services sharing a domain model. Each has its own AGENTS.md with detailed context:
+Two Python services sharing a domain model, plus a Next.js frontend. Each has its own AGENTS.md with detailed context:
 
 - **tracker** (`fundingpulse/tracker/AGENTS.md`) — long-running scheduler. Collects funding data from exchanges into the database. Entry: `funding-tracker` CLI.
 - **api** (`fundingpulse/api/AGENTS.md`) — FastAPI read-only HTTP API. Serves funding data to consumers. Entry: `uvicorn fundingpulse.api.main:app`.
 - **models** (`fundingpulse/models/AGENTS.md`) — shared SQLModel domain models used by both services.
 - **migrations** (`fundingpulse/migrations/`) — Alembic migrations (TimescaleDB-aware). Numbered sequentially: `001_`, `002_`, etc.
+- **frontend** (`frontend/AGENTS.md`) — Next.js App Router web UI that consumes the API. Separate toolchain (npm, not uv).
 
 ## Stack
 
