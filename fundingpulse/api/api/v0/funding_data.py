@@ -93,6 +93,7 @@ def require_contract_slice(
     section_names: Annotated[list[str] | None, Query()] = None,
     quote_names: Annotated[list[str] | None, Query()] = None,
 ) -> tuple[list[str] | None, list[str] | None, list[str] | None]:
+    """quote_names only refines a slice; it cannot anchor one."""
     if not asset_names and not section_names:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
