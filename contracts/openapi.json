@@ -1,0 +1,1829 @@
+{
+  "components": {
+    "schemas": {
+      "AssetNames": {
+        "properties": {
+          "names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Names",
+            "type": "array"
+          }
+        },
+        "required": [
+          "names"
+        ],
+        "title": "AssetNames",
+        "type": "object"
+      },
+      "BaseResponse_AssetNames_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/AssetNames"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "BaseResponse[AssetNames]",
+        "type": "object"
+      },
+      "BaseResponse_ContractMeta_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ContractMeta"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "BaseResponse[ContractMeta]",
+        "type": "object"
+      },
+      "BaseResponse_ContractSearchResults_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/ContractSearchResults"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "BaseResponse[ContractSearchResults]",
+        "type": "object"
+      },
+      "BaseResponse_QuoteNames_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/QuoteNames"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "BaseResponse[QuoteNames]",
+        "type": "object"
+      },
+      "BaseResponse_SectionNames_": {
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/SectionNames"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "data"
+        ],
+        "title": "BaseResponse[SectionNames]",
+        "type": "object"
+      },
+      "ContractMeta": {
+        "properties": {
+          "asset_name": {
+            "title": "Asset Name",
+            "type": "string"
+          },
+          "deprecated": {
+            "title": "Deprecated",
+            "type": "boolean"
+          },
+          "funding_interval": {
+            "title": "Funding Interval",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "quote_name": {
+            "title": "Quote Name",
+            "type": "string"
+          },
+          "section_name": {
+            "title": "Section Name",
+            "type": "string"
+          },
+          "special_fields": {
+            "additionalProperties": true,
+            "title": "Special Fields",
+            "type": "object"
+          },
+          "synced": {
+            "title": "Synced",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "asset_name",
+          "section_name",
+          "quote_name",
+          "funding_interval",
+          "synced",
+          "special_fields",
+          "deprecated"
+        ],
+        "title": "ContractMeta",
+        "type": "object"
+      },
+      "ContractSearchResult": {
+        "properties": {
+          "asset_name": {
+            "title": "Asset Name",
+            "type": "string"
+          },
+          "asset_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asset Score"
+          },
+          "funding_interval": {
+            "title": "Funding Interval",
+            "type": "integer"
+          },
+          "fuzzy_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fuzzy Score"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "quote_name": {
+            "title": "Quote Name",
+            "type": "string"
+          },
+          "quote_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote Score"
+          },
+          "relevance_score": {
+            "title": "Relevance Score",
+            "type": "integer"
+          },
+          "section_name": {
+            "title": "Section Name",
+            "type": "string"
+          },
+          "section_score": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Section Score"
+          }
+        },
+        "required": [
+          "id",
+          "asset_name",
+          "section_name",
+          "quote_name",
+          "funding_interval",
+          "relevance_score"
+        ],
+        "title": "ContractSearchResult",
+        "type": "object"
+      },
+      "ContractSearchResults": {
+        "properties": {
+          "contracts": {
+            "items": {
+              "$ref": "#/components/schemas/ContractSearchResult"
+            },
+            "title": "Contracts",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contracts"
+        ],
+        "title": "ContractSearchResults",
+        "type": "object"
+      },
+      "CumulativeFundingDifference": {
+        "properties": {
+          "abs_difference": {
+            "title": "Abs Difference",
+            "type": "number"
+          },
+          "aligned_from": {
+            "title": "Aligned From",
+            "type": "integer"
+          },
+          "aligned_to": {
+            "title": "Aligned To",
+            "type": "integer"
+          },
+          "asset_name": {
+            "title": "Asset Name",
+            "type": "string"
+          },
+          "contract_1_id": {
+            "format": "uuid",
+            "title": "Contract 1 Id",
+            "type": "string"
+          },
+          "contract_1_quote": {
+            "title": "Contract 1 Quote",
+            "type": "string"
+          },
+          "contract_1_section": {
+            "title": "Contract 1 Section",
+            "type": "string"
+          },
+          "contract_1_total_funding": {
+            "title": "Contract 1 Total Funding",
+            "type": "number"
+          },
+          "contract_2_id": {
+            "format": "uuid",
+            "title": "Contract 2 Id",
+            "type": "string"
+          },
+          "contract_2_quote": {
+            "title": "Contract 2 Quote",
+            "type": "string"
+          },
+          "contract_2_section": {
+            "title": "Contract 2 Section",
+            "type": "string"
+          },
+          "contract_2_total_funding": {
+            "title": "Contract 2 Total Funding",
+            "type": "number"
+          },
+          "difference": {
+            "title": "Difference",
+            "type": "number"
+          }
+        },
+        "required": [
+          "asset_name",
+          "contract_1_id",
+          "contract_1_section",
+          "contract_1_quote",
+          "contract_1_total_funding",
+          "contract_2_id",
+          "contract_2_section",
+          "contract_2_quote",
+          "contract_2_total_funding",
+          "difference",
+          "abs_difference",
+          "aligned_from",
+          "aligned_to"
+        ],
+        "title": "CumulativeFundingDifference",
+        "type": "object"
+      },
+      "FundingPeriodSums": {
+        "properties": {
+          "asset_name": {
+            "title": "Asset Name",
+            "type": "string"
+          },
+          "contract_id": {
+            "format": "uuid",
+            "title": "Contract Id",
+            "type": "string"
+          },
+          "quote_name": {
+            "title": "Quote Name",
+            "type": "string"
+          },
+          "section_name": {
+            "title": "Section Name",
+            "type": "string"
+          },
+          "sum_14d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sum 14D"
+          },
+          "sum_180d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sum 180D"
+          },
+          "sum_30d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sum 30D"
+          },
+          "sum_365d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sum 365D"
+          },
+          "sum_7d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sum 7D"
+          },
+          "sum_90d": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sum 90D"
+          }
+        },
+        "required": [
+          "contract_id",
+          "asset_name",
+          "section_name",
+          "quote_name",
+          "sum_7d",
+          "sum_14d",
+          "sum_30d",
+          "sum_90d",
+          "sum_180d",
+          "sum_365d"
+        ],
+        "title": "FundingPeriodSums",
+        "type": "object"
+      },
+      "FundingPoint": {
+        "description": "A single funding rate point.",
+        "properties": {
+          "contract_id": {
+            "format": "uuid",
+            "title": "Contract Id",
+            "type": "string"
+          },
+          "funding_rate": {
+            "title": "Funding Rate",
+            "type": "number"
+          },
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp",
+          "funding_rate",
+          "contract_id"
+        ],
+        "title": "FundingPoint",
+        "type": "object"
+      },
+      "FundingRateDifference": {
+        "properties": {
+          "abs_difference": {
+            "title": "Abs Difference",
+            "type": "number"
+          },
+          "asset_name": {
+            "title": "Asset Name",
+            "type": "string"
+          },
+          "contract_1_funding_rate": {
+            "title": "Contract 1 Funding Rate",
+            "type": "number"
+          },
+          "contract_1_id": {
+            "format": "uuid",
+            "title": "Contract 1 Id",
+            "type": "string"
+          },
+          "contract_1_quote": {
+            "title": "Contract 1 Quote",
+            "type": "string"
+          },
+          "contract_1_section": {
+            "title": "Contract 1 Section",
+            "type": "string"
+          },
+          "contract_2_funding_rate": {
+            "title": "Contract 2 Funding Rate",
+            "type": "number"
+          },
+          "contract_2_id": {
+            "format": "uuid",
+            "title": "Contract 2 Id",
+            "type": "string"
+          },
+          "contract_2_quote": {
+            "title": "Contract 2 Quote",
+            "type": "string"
+          },
+          "contract_2_section": {
+            "title": "Contract 2 Section",
+            "type": "string"
+          },
+          "difference": {
+            "title": "Difference",
+            "type": "number"
+          }
+        },
+        "required": [
+          "asset_name",
+          "contract_1_id",
+          "contract_1_section",
+          "contract_1_quote",
+          "contract_1_funding_rate",
+          "contract_2_id",
+          "contract_2_section",
+          "contract_2_quote",
+          "contract_2_funding_rate",
+          "difference",
+          "abs_difference"
+        ],
+        "title": "FundingRateDifference",
+        "type": "object"
+      },
+      "FundingWallAsset": {
+        "properties": {
+          "asset": {
+            "title": "Asset",
+            "type": "string"
+          },
+          "market_cap_rank": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Market Cap Rank"
+          },
+          "rates": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Rates",
+            "type": "object"
+          }
+        },
+        "required": [
+          "asset",
+          "market_cap_rank",
+          "rates"
+        ],
+        "title": "FundingWallAsset",
+        "type": "object"
+      },
+      "FundingWallResponse": {
+        "properties": {
+          "assets": {
+            "items": {
+              "$ref": "#/components/schemas/FundingWallAsset"
+            },
+            "title": "Assets",
+            "type": "array"
+          },
+          "exchanges": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Exchanges",
+            "type": "array"
+          },
+          "timestamp": {
+            "title": "Timestamp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "timestamp",
+          "assets",
+          "exchanges"
+        ],
+        "title": "FundingWallResponse",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "NormalizeToInterval": {
+        "enum": [
+          "raw",
+          "1h",
+          "8h",
+          "1d",
+          "365d"
+        ],
+        "title": "NormalizeToInterval",
+        "type": "string"
+      },
+      "PaginatedCumulativeFundingDifference": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/CumulativeFundingDifference"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "data",
+          "total_count",
+          "offset",
+          "limit",
+          "has_more"
+        ],
+        "title": "PaginatedCumulativeFundingDifference",
+        "type": "object"
+      },
+      "PaginatedFundingRateDifference": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/FundingRateDifference"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "total_count": {
+            "title": "Total Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "data",
+          "total_count",
+          "offset",
+          "limit",
+          "has_more"
+        ],
+        "title": "PaginatedFundingRateDifference",
+        "type": "object"
+      },
+      "QuoteNames": {
+        "properties": {
+          "names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Names",
+            "type": "array"
+          }
+        },
+        "required": [
+          "names"
+        ],
+        "title": "QuoteNames",
+        "type": "object"
+      },
+      "SectionNames": {
+        "properties": {
+          "names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Names",
+            "type": "array"
+          }
+        },
+        "required": [
+          "names"
+        ],
+        "title": "SectionNames",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Funding Data API",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/v0/funding-data/diff/historical_cumulative_differences": {
+      "get": {
+        "operationId": "historical_cumulative_differences_api_v0_funding_data_diff_historical_cumulative_differences_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "asset_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset Names"
+            }
+          },
+          {
+            "in": "query",
+            "name": "section_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Section Names"
+            }
+          },
+          {
+            "in": "query",
+            "name": "quote_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Quote Names"
+            }
+          },
+          {
+            "in": "query",
+            "name": "compare_for_section",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Compare For Section"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_diff",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Diff"
+            }
+          },
+          {
+            "in": "query",
+            "name": "buffer_minutes",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "title": "Buffer Minutes",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_ts",
+            "required": true,
+            "schema": {
+              "title": "From Ts",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_ts",
+            "required": true,
+            "schema": {
+              "title": "To Ts",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedCumulativeFundingDifference"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get cumulative funding differences over a time period",
+        "tags": [
+          "funding-data"
+        ]
+      }
+    },
+    "/api/v0/funding-data/diff/historical_differences": {
+      "get": {
+        "operationId": "historical_funding_differences_api_v0_funding_data_diff_historical_differences_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "normalize_to_interval",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/NormalizeToInterval",
+              "default": "raw"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asset_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset Names"
+            }
+          },
+          {
+            "in": "query",
+            "name": "section_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Section Names"
+            }
+          },
+          {
+            "in": "query",
+            "name": "quote_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Quote Names"
+            }
+          },
+          {
+            "in": "query",
+            "name": "compare_for_section",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Compare For Section"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_diff",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Diff"
+            }
+          },
+          {
+            "in": "query",
+            "name": "buffer_minutes",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "title": "Buffer Minutes",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_ts",
+            "required": true,
+            "schema": {
+              "title": "From Ts",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_ts",
+            "required": true,
+            "schema": {
+              "title": "To Ts",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedCumulativeFundingDifference"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get historical funding differences over a time period with optional normalization",
+        "tags": [
+          "funding-data"
+        ]
+      }
+    },
+    "/api/v0/funding-data/diff/live_differences": {
+      "get": {
+        "operationId": "funding_rate_differences_api_v0_funding_data_diff_live_differences_get",
+        "parameters": [
+          {
+            "description": "List of asset names to filter by. 'all' or leave empty for all assets.",
+            "in": "query",
+            "name": "asset_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "List of asset names to filter by. 'all' or leave empty for all assets.",
+              "title": "Asset Names"
+            }
+          },
+          {
+            "description": "List of section names to filter by. 'all' or leave empty for all sections.",
+            "in": "query",
+            "name": "section_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "List of section names to filter by. 'all' or leave empty for all sections.",
+              "title": "Section Names"
+            }
+          },
+          {
+            "description": "List of quote currency names to filter by. 'all' or leave empty for all quotes.",
+            "in": "query",
+            "name": "quote_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "List of quote currency names to filter by. 'all' or leave empty for all quotes.",
+              "title": "Quote Names"
+            }
+          },
+          {
+            "in": "query",
+            "name": "normalize_to_interval",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/NormalizeToInterval",
+              "default": "365d"
+            }
+          },
+          {
+            "description": "A specific section to compare against all others.",
+            "in": "query",
+            "name": "compare_for_section",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A specific section to compare against all others.",
+              "title": "Compare For Section"
+            }
+          },
+          {
+            "description": "Minimum absolute difference to filter results. Only differences >= min_diff will be returned.",
+            "in": "query",
+            "name": "min_diff",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Minimum absolute difference to filter results. Only differences >= min_diff will be returned.",
+              "title": "Min Diff"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PaginatedFundingRateDifference"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get latest funding rate differences between contracts for the same asset",
+        "tags": [
+          "funding-data"
+        ]
+      }
+    },
+    "/api/v0/funding-data/funding-wall": {
+      "get": {
+        "operationId": "funding_wall_api_v0_funding_data_funding_wall_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "period",
+            "required": true,
+            "schema": {
+              "enum": [
+                "live",
+                "historical"
+              ],
+              "title": "Period",
+              "type": "string"
+            }
+          },
+          {
+            "description": "List of asset names to filter by",
+            "in": "query",
+            "name": "assets",
+            "required": true,
+            "schema": {
+              "description": "List of asset names to filter by",
+              "items": {
+                "type": "string"
+              },
+              "title": "Assets",
+              "type": "array"
+            }
+          },
+          {
+            "description": "List of exchange names to filter by",
+            "in": "query",
+            "name": "exchanges",
+            "required": true,
+            "schema": {
+              "description": "List of exchange names to filter by",
+              "items": {
+                "type": "string"
+              },
+              "title": "Exchanges",
+              "type": "array"
+            }
+          },
+          {
+            "description": "Normalization interval",
+            "in": "query",
+            "name": "normalize",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/NormalizeToInterval",
+              "description": "Normalization interval"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_ts",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "From Ts"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_ts",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "To Ts"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FundingWallResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get funding wall matrix data",
+        "tags": [
+          "funding-data"
+        ]
+      }
+    },
+    "/api/v0/funding-data/historical_points": {
+      "get": {
+        "operationId": "historical_points_api_v0_funding_data_historical_points_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "normalize_to_interval",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/NormalizeToInterval",
+              "default": "raw"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_ts",
+            "required": true,
+            "schema": {
+              "title": "From Ts",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_ts",
+            "required": true,
+            "schema": {
+              "title": "To Ts",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FundingPoint"
+                  },
+                  "title": "Response Historical Points Api V0 Funding Data Historical Points Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get historical funding points for a contract",
+        "tags": [
+          "funding-data"
+        ]
+      }
+    },
+    "/api/v0/funding-data/live_points": {
+      "get": {
+        "operationId": "live_points_api_v0_funding_data_live_points_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "normalize_to_interval",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/NormalizeToInterval",
+              "default": "raw"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from_ts",
+            "required": true,
+            "schema": {
+              "title": "From Ts",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to_ts",
+            "required": true,
+            "schema": {
+              "title": "To Ts",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FundingPoint"
+                  },
+                  "title": "Response Live Points Api V0 Funding Data Live Points Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get aggregated live funding points for a contract",
+        "tags": [
+          "funding-data"
+        ]
+      }
+    },
+    "/api/v0/funding-data/period_sums/{contract_id}": {
+      "get": {
+        "operationId": "period_sums_api_v0_funding_data_period_sums__contract_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FundingPeriodSums"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get funding sums for different time periods for a specific contract",
+        "tags": [
+          "funding-data"
+        ]
+      }
+    },
+    "/api/v0/meta/assets": {
+      "get": {
+        "description": "Get all asset names that exist in contracts.\n\nReturns assets sorted by market_cap_rank (ascending), then alphabetically\nfor assets without market_cap_rank.",
+        "operationId": "get_assets_api_v0_meta_assets_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse_AssetNames_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Assets",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
+    "/api/v0/meta/contracts/search": {
+      "get": {
+        "description": "Search contracts with prefix-aware scoring and fuzzy fallback.",
+        "operationId": "search_contracts_api_v0_meta_contracts_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "query",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "minLength": 1,
+              "title": "Query",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "debug",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Debug",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse_ContractSearchResults_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Contracts",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
+    "/api/v0/meta/contracts/{contract_id}": {
+      "get": {
+        "description": "Get single contract metadata by contract id.",
+        "operationId": "get_contract_meta_api_v0_meta_contracts__contract_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contract_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Contract Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse_ContractMeta_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Contract Meta",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
+    "/api/v0/meta/quotes": {
+      "get": {
+        "description": "Get all quote names ordered alphabetically.",
+        "operationId": "get_quotes_api_v0_meta_quotes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse_QuoteNames_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Quotes",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
+    "/api/v0/meta/sections": {
+      "get": {
+        "description": "Get all section names ordered alphabetically.",
+        "operationId": "get_sections_api_v0_meta_sections_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse_SectionNames_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Sections",
+        "tags": [
+          "meta"
+        ]
+      }
+    },
+    "/health": {
+      "get": {
+        "operationId": "healthcheck_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Healthcheck Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Healthcheck"
+      }
+    }
+  }
+}

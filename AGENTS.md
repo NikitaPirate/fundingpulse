@@ -10,6 +10,7 @@ Two Python services sharing a domain model, plus a Next.js frontend. Each has it
 - **api** (`fundingpulse/api/AGENTS.md`) — FastAPI read-only HTTP API. Serves funding data to consumers. Entry: `uvicorn fundingpulse.api.main:app`.
 - **models** (`fundingpulse/models/AGENTS.md`) — shared SQLModel domain models used by both services.
 - **migrations** (`fundingpulse/migrations/`) — Alembic migrations (TimescaleDB-aware). Numbered sequentially: `001_`, `002_`, etc.
+- **contracts** (`contracts/openapi.json`) — exported OpenAPI artifact shared between FastAPI and the frontend type/mock pipeline.
 - **frontend** (`frontend/AGENTS.md`) — Next.js App Router web UI that consumes the API. Separate toolchain (npm, not uv).
 
 ## Stack
@@ -40,6 +41,9 @@ uv run funding-tracker                    # tracker (all exchanges)
 uv run funding-tracker --exchanges bybit  # tracker (specific exchange)
 uv run uvicorn fundingpulse.api.main:app  # API
 uv run pytest                             # tests (needs Docker for testcontainers)
+npm run contract:sync                     # export OpenAPI + regenerate frontend API types
+npm run frontend:dev:mock                 # frontend with MSW-backed API mocks
+npm run frontend:test                     # frontend Vitest suite
 ```
 
 ## Testing

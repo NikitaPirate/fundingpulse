@@ -16,7 +16,7 @@
 
 .heading {
   display: grid;
-  gap: 0;
+  gap: var(--space-xs);
 }
 
 .title {
@@ -24,17 +24,25 @@
   font-family: var(--font-display);
   font-size: clamp(1.6rem, 2vw, 2.3rem);
   line-height: 1;
-  letter-spacing: 0.02em;
 }
 
-.headerLabel {
+.subtitle {
+  max-width: 48rem;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+}
+
+.headerLabel,
+.filterLabel {
   color: var(--color-text-soft);
   font-size: 0.72rem;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
 .headerValue {
+  color: var(--color-text);
   font-size: 0.92rem;
 }
 
@@ -61,7 +69,7 @@
 }
 
 .controlStrip,
-.surface {
+.tableSection {
   min-width: 0;
 }
 
@@ -73,7 +81,8 @@
 }
 
 .stripHeader,
-.workspaceHeader {
+.tableHeader,
+.paginationBar {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -81,42 +90,291 @@
 }
 
 .bandTitle {
-  color: var(--color-text-muted);
   font-size: 0.78rem;
   font-family: var(--font-mono);
   letter-spacing: 0.16em;
   text-transform: uppercase;
+  color: var(--color-text-muted);
 }
 
-.slotRow {
+.clearFiltersButton,
+.panelAction,
+.clearInlineButton,
+.paginationButton,
+.applyCustomButton {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.clearFiltersButton:hover,
+.panelAction:hover,
+.clearInlineButton:hover,
+.paginationButton:hover:not(:disabled),
+.applyCustomButton:hover:not(:disabled) {
+  color: var(--color-text);
+}
+
+.paginationButton:disabled,
+.applyCustomButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.filtersGrid {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: var(--space-xs);
 }
 
-.slot {
-  display: flex;
-  align-items: center;
+.filterPopover {
+  position: relative;
+  min-width: 0;
+}
+
+.filterTrigger,
+.minDiffFilter {
+  display: grid;
+  align-content: center;
+  gap: var(--space-2xs);
   min-height: 3rem;
   min-width: 0;
   padding: 0 var(--space-sm);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
   background: transparent;
 }
 
-.workspacePills {
+.filterTrigger {
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+}
+
+.filterTrigger:hover {
+  border-color: var(--color-border-strong);
+}
+
+.filterTriggerActive {
+  border-color: color-mix(in srgb, var(--color-accent) 30%, var(--color-border));
+}
+
+.filterSummary {
+  overflow: hidden;
+  color: var(--color-text);
+  font-size: 0.92rem;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.liveSummary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+}
+
+.liveIndicator {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: #66d795;
+  box-shadow: 0 0 0 0.14rem rgba(102, 215, 149, 0.18);
+  flex: 0 0 auto;
+}
+
+.filterPanel {
+  position: absolute;
+  top: calc(100% + var(--space-xs));
+  left: 0;
+  z-index: calc(var(--z-nav) + 5);
+  display: grid;
+  gap: var(--space-sm);
+  width: min(24rem, calc(100vw - 2rem));
+  padding: var(--space-sm);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-surface-strong) 98%, transparent);
+  box-shadow: var(--shadow-soft);
+}
+
+.periodPanel {
+  width: min(28rem, calc(100vw - 2rem));
+}
+
+.panelHeader {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: end;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.panelTitle,
+.panelSubtitle {
+  font-size: 0.76rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.filterSearch,
+.dateInput {
+  width: 100%;
+  padding: 0.72rem 0.8rem;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+}
+
+.filterSearch::placeholder {
+  color: var(--color-text-soft);
+}
+
+.optionList {
+  display: grid;
+  gap: 1px;
+  max-height: 16rem;
+  overflow-y: auto;
+  padding: var(--space-2xs);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.optionRow {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-xs) var(--space-sm);
+  border-radius: calc(var(--radius-sm) - 0.12rem);
+  cursor: pointer;
+}
+
+.optionRow:hover {
+  background: var(--color-placeholder);
+}
+
+.optionInput {
+  margin: 0;
+}
+
+.optionLabel,
+.optionEmpty {
+  font-size: 0.9rem;
+}
+
+.optionEmpty {
+  padding: var(--space-sm);
+  color: var(--color-text-muted);
+}
+
+.periodGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-xs);
 }
 
-.workspacePills span {
-  padding: var(--space-xs) var(--space-sm);
+.periodButton {
+  padding: var(--space-sm);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.periodButtonActive {
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+}
+
+.customRange {
+  display: grid;
+  gap: var(--space-sm);
+  padding-top: var(--space-xs);
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.customRangeHeader,
+.customRangeFields {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.customRangeFields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dateField {
+  display: grid;
+  gap: var(--space-xs);
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
+
+.minDiffControl {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+.minDiffInput {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+}
+
+.minDiffInput::placeholder {
+  color: var(--color-text-soft);
+}
+
+.minDiffSuffix {
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+}
+
+.metaError,
+.messagePanel {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: #d88c8c;
+  font-size: 0.86rem;
+}
+
+.tableSection {
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  gap: var(--space-sm);
+  min-width: 0;
+  min-height: 0;
+}
+
+.tableHeaderCopy {
+  display: grid;
+  gap: 0;
+}
+
+.tableCount {
+  display: none;
+}
+
+.tableMeta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+.tableMeta span {
   color: var(--color-text-muted);
   font-size: 0.74rem;
   font-family: var(--font-mono);
@@ -124,21 +382,17 @@
   text-transform: uppercase;
 }
 
-.surface {
-  display: grid;
-  grid-template-rows: auto 1fr;
-  min-height: 0;
-}
-
 .tableShell {
   overflow: hidden;
   min-width: 0;
+  background: transparent;
 }
 
 .tableHead,
-.tableRow {
+.tableRow,
+.tableRowSkeleton {
   display: grid;
-  grid-template-columns: 0.8fr 1.4fr 1.4fr 1fr 1fr;
+  grid-template-columns: 0.8fr 1.45fr 1.45fr 1fr 1fr;
   gap: var(--space-md);
   align-items: center;
 }
@@ -157,9 +411,80 @@
   display: grid;
 }
 
-.tableRow {
+.tableRow,
+.tableRowSkeleton {
   padding: var(--space-md) var(--space-lg);
   border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.tableRow {
+  color: inherit;
+}
+
+.tableRow:hover {
+  background: var(--color-placeholder);
+}
+
+.tableRow:last-child,
+.tableRowSkeleton:last-child {
+  border-bottom: none;
+}
+
+.assetCell,
+.contractCell {
+  display: grid;
+  gap: var(--space-2xs);
+  min-width: 0;
+}
+
+.assetName,
+.contractCell strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assetMeta,
+.contractCell span {
+  color: var(--color-text-muted);
+  font-size: 0.83rem;
+}
+
+.contractMetric {
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+
+.deltaCell {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+}
+
+.positiveValue {
+  color: #76e8b4;
+}
+
+.negativeValue {
+  color: #ff8f8f;
+}
+
+.absValue {
+  color: var(--color-text);
+}
+
+.paginationMeta {
+  color: var(--color-text-muted);
+  font-size: 0.84rem;
+}
+
+.paginationActions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+.tableRowSkeleton {
+  min-height: 4.5rem;
 }
 
 .cellBar {
@@ -169,7 +494,13 @@
   background: linear-gradient(90deg, var(--color-placeholder-strong), transparent 78%);
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1180px) {
+  .filtersGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
   .header {
     grid-template-columns: 1fr;
   }
@@ -183,19 +514,22 @@
     border-top: var(--border-width) solid var(--color-border);
   }
 
-  .slotRow {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 800px) {
-  .workspaceHeader {
+  .tableHeader,
+  .paginationBar {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .workspacePills {
+  .tableMeta {
     justify-content: flex-start;
+  }
+
+  .filtersGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .customRangeFields {
+    grid-template-columns: 1fr;
   }
 
   .tableShell {
@@ -203,7 +537,8 @@
   }
 
   .tableHead,
-  .tableRow {
+  .tableRow,
+  .tableRowSkeleton {
     min-width: 46rem;
   }
 }
@@ -217,7 +552,15 @@
     padding: var(--space-sm);
   }
 
-  .slotRow {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .filtersGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .filterPanel,
+  .periodPanel {
+    position: fixed;
+    right: var(--space-xs);
+    left: var(--space-xs);
+    width: auto;
   }
 }
