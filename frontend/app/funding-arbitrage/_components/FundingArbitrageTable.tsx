@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 
+import { formatFundingValue } from "../../_lib/formatFundingValue";
 import styles from "../page.module.css";
 import type {
   FundingArbitrageFilters,
@@ -15,22 +16,6 @@ type FundingArbitrageTableProps = {
   error: string | null;
   onPageChange: (offset: number) => void;
 };
-
-function formatFundingValue(value: number) {
-  const percentage = value * 100;
-  const absValue = Math.abs(percentage);
-  const sign = percentage >= 0 ? "+" : "-";
-
-  if (absValue >= 1) {
-    return `${sign}${absValue.toFixed(2)}%`;
-  }
-
-  if (absValue >= 0.1) {
-    return `${sign}${absValue.toFixed(3)}%`;
-  }
-
-  return `${sign}${absValue.toFixed(4)}%`;
-}
 
 function metricLabel(filters: FundingArbitrageFilters) {
   if (filters.period.type === "live") {

@@ -6,17 +6,13 @@
 }
 
 .header {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(24rem, 0.9fr);
-  gap: var(--space-lg);
-  align-items: end;
   padding: var(--space-md) var(--space-lg);
   border-bottom: var(--border-width) solid var(--color-border);
 }
 
 .heading {
   display: grid;
-  gap: 0;
+  gap: var(--space-xs);
 }
 
 .title {
@@ -26,51 +22,41 @@
   line-height: 1;
 }
 
-.headerStack,
-.workspace {
-  display: grid;
-  gap: 0;
-}
-
-.headerStack {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.statusCell {
-  display: grid;
-  align-content: center;
-  gap: var(--space-xs);
-  min-height: 4.75rem;
-  padding: var(--space-md);
-  border-left: var(--border-width) solid var(--color-border);
-}
-
-.statusLabel {
-  color: var(--color-text-soft);
-  font-size: 0.72rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.statusValue {
-  color: var(--color-text);
-  font-size: 0.92rem;
+.subtitle {
+  max-width: 48rem;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
 }
 
 .workspace {
+  display: grid;
   grid-template-rows: auto 1fr;
   min-height: 0;
   gap: var(--space-sm);
 }
 
-.sectionHeader {
+.controlStrip,
+.tableSection {
+  min-width: 0;
+}
+
+.controlStrip {
+  display: grid;
+  gap: var(--space-sm);
+  padding: 0 var(--space-lg) var(--space-sm);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.stripHeader,
+.tableHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: var(--space-md);
 }
 
-.sectionTitle {
+.bandTitle {
   font-size: 0.78rem;
   font-family: var(--font-mono);
   letter-spacing: 0.16em;
@@ -78,49 +64,70 @@
   color: var(--color-text-muted);
 }
 
-.controls {
-  display: grid;
-  gap: var(--space-sm);
-  padding: 0 0 var(--space-sm);
-  border-bottom: var(--border-width) solid var(--color-border);
+.clearFiltersButton {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
 }
 
-.controlGrid {
+.clearFiltersButton:hover {
+  color: var(--color-text);
+}
+
+.filtersGrid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-xs);
 }
 
-.controlSlot {
-  display: flex;
-  align-items: center;
-  min-height: 3rem;
-  min-width: 0;
-  padding: 0 var(--space-sm);
-  border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-sm);
-  color: var(--color-text-muted);
+.messagePanel,
+.emptyState {
+  padding: 0 var(--space-lg);
+  border: none;
   background: transparent;
+  font-size: 0.86rem;
 }
 
-.tableZone {
+.messagePanel {
+  color: #d88c8c;
+}
+
+.emptyState {
+  color: var(--color-text-muted);
+}
+
+.tableSection {
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto 1fr;
+  gap: var(--space-sm);
   min-width: 0;
   min-height: 0;
 }
 
-.legend {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: end;
-  gap: var(--space-xs);
+.tableHeader {
+  padding: 0 var(--space-lg);
 }
 
-.legend span {
-  padding: var(--space-xs) var(--space-sm);
-  border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-sm);
+.tableHeaderCopy {
+  display: grid;
+  gap: 0;
+}
+
+.tableCount {
+  color: var(--color-text);
+  font-size: 0.94rem;
+}
+
+.tableMeta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+}
+
+.tableMeta span {
   color: var(--color-text-muted);
   font-size: 0.74rem;
   font-family: var(--font-mono);
@@ -130,12 +137,15 @@
 
 .tableShell {
   overflow: hidden;
+  min-width: 0;
+  background: transparent;
 }
 
 .tableHead,
-.tableRow {
+.tableRow,
+.tableRowSkeleton {
   display: grid;
-  grid-template-columns: 1.3fr 0.8fr 1fr 1fr 1fr 1fr;
+  grid-template-columns: 1.2fr 0.8fr repeat(5, minmax(0, 0.85fr));
   gap: var(--space-md);
   align-items: center;
 }
@@ -143,20 +153,88 @@
 .tableHead {
   padding: var(--space-md) var(--space-lg);
   border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.columnButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 0;
+  border: none;
+  background: transparent;
   color: var(--color-text-muted);
   font-size: 0.76rem;
   font-family: var(--font-mono);
   letter-spacing: 0.12em;
   text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+}
+
+.columnButton:hover {
+  color: var(--color-text);
+}
+
+.sortIndicator {
+  color: var(--color-text-soft);
+  font-size: 0.72rem;
 }
 
 .tableBody {
   display: grid;
 }
 
-.tableRow {
+.tableRow,
+.tableRowSkeleton {
   padding: var(--space-md) var(--space-lg);
   border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.tableRow {
+  color: inherit;
+}
+
+.tableRow:hover {
+  background: var(--color-placeholder);
+}
+
+.tableRow:last-child,
+.tableRowSkeleton:last-child {
+  border-bottom: none;
+}
+
+.primaryCell,
+.secondaryCell,
+.positiveValue,
+.negativeValue,
+.mutedValue {
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+}
+
+.primaryCell,
+.secondaryCell {
+  color: var(--color-text);
+}
+
+.secondaryCell {
+  color: var(--color-text-muted);
+}
+
+.positiveValue {
+  color: #76e8b4;
+}
+
+.negativeValue {
+  color: #ff8f8f;
+}
+
+.mutedValue {
+  color: var(--color-text-soft);
+}
+
+.tableRowSkeleton {
+  min-height: 4.5rem;
 }
 
 .cellBar {
@@ -166,32 +244,20 @@
   background: linear-gradient(90deg, var(--color-placeholder-strong), transparent 78%);
 }
 
+@media (max-width: 1100px) {
+  .filtersGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 900px) {
-  .header {
-    grid-template-columns: 1fr;
-  }
-
-  .headerStack {
-    grid-template-columns: 1fr;
-  }
-
-  .statusCell {
-    border-left: none;
-    border-top: var(--border-width) solid var(--color-border);
-  }
-
-  .sectionHeader {
+  .tableHeader {
     flex-direction: column;
     align-items: stretch;
   }
 
-  .headerStack,
-  .legend {
+  .tableMeta {
     justify-content: flex-start;
-  }
-
-  .controlGrid {
-    grid-template-columns: 1fr;
   }
 
   .tableShell {
@@ -199,8 +265,9 @@
   }
 
   .tableHead,
-  .tableRow {
-    min-width: 42rem;
+  .tableRow,
+  .tableRowSkeleton {
+    min-width: 58rem;
   }
 }
 
@@ -211,5 +278,16 @@
 
   .header {
     padding: var(--space-sm);
+  }
+
+  .controlStrip,
+  .tableHeader,
+  .messagePanel,
+  .emptyState {
+    padding-inline: var(--space-sm);
+  }
+
+  .filtersGrid {
+    grid-template-columns: 1fr;
   }
 }

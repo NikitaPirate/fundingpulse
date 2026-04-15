@@ -18,3 +18,18 @@ export type HistoricalDifferencesResponse =
   paths["/api/v0/funding-data/diff/historical_differences"]["get"]["responses"][200]["content"]["application/json"];
 
 export type HistoricalDifferenceRow = HistoricalDifferencesResponse["data"][number];
+
+export type LiveLatestResponse =
+  paths["/api/v0/funding-data/live_latest"]["get"]["responses"][200]["content"]["application/json"];
+
+export type LiveLatestRow = LiveLatestResponse[number];
+
+export type HistoricalLatestResponse =
+  paths["/api/v0/funding-data/historical_latest"]["get"]["responses"][200]["content"]["application/json"];
+
+export type HistoricalLatestRow = HistoricalLatestResponse[number];
+
+export type HistoricalAvgResponse =
+  paths["/api/v0/funding-data/historical_avg"]["get"]["responses"][200]["content"]["application/json"];
+
+export type HistoricalAvgEntry = HistoricalAvgResponse[number];

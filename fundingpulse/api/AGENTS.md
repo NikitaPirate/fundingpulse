@@ -43,6 +43,11 @@ api/
 - `GET /diff/historical_differences` — cross-exchange rate comparison over time range
 - `GET /diff/historical_cumulative_differences` — cumulative funding diffs over time
 - `GET /funding-wall` — matrix: assets x exchanges, live or historical, raw or normalized
+- `GET /live_latest` — latest live rate per contract for a filter slice
+- `GET /historical_latest` — latest settled rate per contract for a filter slice (30d validity window)
+- `GET /historical_avg` — average historical funding per contract over arbitrary day windows
+
+The three slice endpoints require `asset_names` or `section_names` (quote-only is rejected), default to `365d` normalization, and return the full contract set from `contract_enriched` with nullable data fields.
 
 ## Rate normalization
 

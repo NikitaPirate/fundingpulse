@@ -634,6 +634,153 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "HistoricalAvgEntry": {
+        "properties": {
+          "asset_name": {
+            "title": "Asset Name",
+            "type": "string"
+          },
+          "contract_id": {
+            "format": "uuid",
+            "title": "Contract Id",
+            "type": "string"
+          },
+          "funding_interval": {
+            "title": "Funding Interval",
+            "type": "integer"
+          },
+          "quote_name": {
+            "title": "Quote Name",
+            "type": "string"
+          },
+          "section_name": {
+            "title": "Section Name",
+            "type": "string"
+          },
+          "windows": {
+            "items": {
+              "$ref": "#/components/schemas/HistoricalAvgWindow"
+            },
+            "title": "Windows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract_id",
+          "asset_name",
+          "section_name",
+          "quote_name",
+          "funding_interval",
+          "windows"
+        ],
+        "title": "HistoricalAvgEntry",
+        "type": "object"
+      },
+      "HistoricalAvgWindow": {
+        "properties": {
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "expected_count": {
+            "title": "Expected Count",
+            "type": "integer"
+          },
+          "funding_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Funding Rate"
+          },
+          "oldest_timestamp": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldest Timestamp"
+          },
+          "points_count": {
+            "title": "Points Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "days",
+          "funding_rate",
+          "points_count",
+          "expected_count",
+          "oldest_timestamp"
+        ],
+        "title": "HistoricalAvgWindow",
+        "type": "object"
+      },
+      "LatestFundingPoint": {
+        "properties": {
+          "asset_name": {
+            "title": "Asset Name",
+            "type": "string"
+          },
+          "contract_id": {
+            "format": "uuid",
+            "title": "Contract Id",
+            "type": "string"
+          },
+          "funding_interval": {
+            "title": "Funding Interval",
+            "type": "integer"
+          },
+          "funding_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Funding Rate"
+          },
+          "quote_name": {
+            "title": "Quote Name",
+            "type": "string"
+          },
+          "section_name": {
+            "title": "Section Name",
+            "type": "string"
+          },
+          "timestamp": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
+          }
+        },
+        "required": [
+          "contract_id",
+          "asset_name",
+          "section_name",
+          "quote_name",
+          "funding_interval",
+          "funding_rate",
+          "timestamp"
+        ],
+        "title": "LatestFundingPoint",
+        "type": "object"
+      },
       "NormalizeToInterval": {
         "enum": [
           "raw",
@@ -1435,6 +1582,226 @@
         ]
       }
     },
+    "/api/v0/funding-data/historical_avg": {
+      "get": {
+        "operationId": "historical_avg_api_v0_funding_data_historical_avg_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "normalize_to_interval",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/NormalizeToInterval",
+              "default": "365d"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asset_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset Names"
+            }
+          },
+          {
+            "in": "query",
+            "name": "section_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Section Names"
+            }
+          },
+          {
+            "in": "query",
+            "name": "quote_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Quote Names"
+            }
+          },
+          {
+            "description": "Window sizes in days, e.g. 7 30 90",
+            "in": "query",
+            "name": "windows",
+            "required": true,
+            "schema": {
+              "description": "Window sizes in days, e.g. 7 30 90",
+              "items": {
+                "type": "integer"
+              },
+              "title": "Windows",
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HistoricalAvgEntry"
+                  },
+                  "title": "Response Historical Avg Api V0 Funding Data Historical Avg Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Average historical funding per contract over one or more day windows",
+        "tags": [
+          "funding-data"
+        ]
+      }
+    },
+    "/api/v0/funding-data/historical_latest": {
+      "get": {
+        "operationId": "historical_latest_api_v0_funding_data_historical_latest_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "normalize_to_interval",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/NormalizeToInterval",
+              "default": "365d"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asset_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset Names"
+            }
+          },
+          {
+            "in": "query",
+            "name": "section_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Section Names"
+            }
+          },
+          {
+            "in": "query",
+            "name": "quote_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Quote Names"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LatestFundingPoint"
+                  },
+                  "title": "Response Historical Latest Api V0 Funding Data Historical Latest Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Latest settled historical funding rate per contract for a filter slice",
+        "tags": [
+          "funding-data"
+        ]
+      }
+    },
     "/api/v0/funding-data/historical_points": {
       "get": {
         "operationId": "historical_points_api_v0_funding_data_historical_points_get",
@@ -1504,6 +1871,109 @@
           }
         },
         "summary": "Get historical funding points for a contract",
+        "tags": [
+          "funding-data"
+        ]
+      }
+    },
+    "/api/v0/funding-data/live_latest": {
+      "get": {
+        "operationId": "live_latest_api_v0_funding_data_live_latest_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "normalize_to_interval",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/NormalizeToInterval",
+              "default": "365d"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asset_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset Names"
+            }
+          },
+          {
+            "in": "query",
+            "name": "section_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Section Names"
+            }
+          },
+          {
+            "in": "query",
+            "name": "quote_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Quote Names"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LatestFundingPoint"
+                  },
+                  "title": "Response Live Latest Api V0 Funding Data Live Latest Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Latest live funding rate per contract for a filter slice",
         "tags": [
           "funding-data"
         ]

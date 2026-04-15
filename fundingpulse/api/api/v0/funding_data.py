@@ -13,6 +13,8 @@ from fundingpulse.api.dto.funding_data import (
     FundingPeriodSums,
     FundingPoint,
     FundingWallResponse,
+    HistoricalAvgEntry,
+    LatestFundingPoint,
     PaginatedCumulativeFundingDifference,
     PaginatedFundingRateDifference,
 )
@@ -25,8 +27,11 @@ from fundingpulse.api.queries.funding_data import (
     get_funding_wall_historical_raw,
     get_funding_wall_live_normalized,
     get_funding_wall_live_raw,
+    get_historical_avg,
     get_historical_funding_differences_avg,
+    get_historical_latest,
     get_historical_points,
+    get_live_latest,
 )
 from fundingpulse.time import to_unix_seconds, utc_now
 
@@ -81,6 +86,51 @@ def validate_optional_time_range(
 OptionalTimeRangeValidated = Annotated[
     tuple[int | None, int | None], Depends(validate_optional_time_range)
 ]
+
+
+def require_contract_slice(
+    asset_names: Annotated[list[str] | None, Query()] = None,
+    section_names: Annotated[list[str] | None, Query()] = None,
+    quote_names: Annotated[list[str] | None, Query()] = None,
+) -> tuple[list[str] | None, list[str] | None, list[str] | None]:
+    """quote_names only refines a slice; it cannot anchor one."""
+    if not asset_names and not section_names:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="at least one of asset_names or section_names must be non-empty",
+        )
+    return asset_names, section_names, quote_names
+
+
+ContractSlice = Annotated[
+    tuple[list[str] | None, list[str] | None, list[str] | None],
+    Depends(require_contract_slice),
+]
+
+
+def validate_windows(
+    windows: Annotated[list[int], Query(description="Window sizes in days, e.g. 7 30 90")],
+) -> list[int]:
+    if not windows:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="windows must be non-empty",
+        )
+    for days in windows:
+        if days <= 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="each window must be a positive integer number of days",
+            )
+        if days > 365:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="window cannot exceed 365 days",
+            )
+    return sorted(set(windows))
+
+
+WindowsValidated = Annotated[list[int], Depends(validate_windows)]
 
 
 @router.get(
@@ -310,4 +360,66 @@ async def funding_wall(
         from_ts=from_ts,
         to_ts=to_ts,
         normalize_to_interval=normalize,
+    )
+
+
+@router.get(
+    "/live_latest",
+    response_model=Sequence[LatestFundingPoint],
+    summary="Latest live funding rate per contract for a filter slice",
+)
+async def live_latest(
+    session: SessionDep,
+    slice_: ContractSlice,
+    normalize_to_interval: NormalizeToInterval = NormalizeToInterval.D365,
+) -> Sequence[LatestFundingPoint]:
+    asset_names, section_names, quote_names = slice_
+    return await get_live_latest(
+        session,
+        asset_names=asset_names,
+        section_names=section_names,
+        quote_names=quote_names,
+        normalize_to_interval=normalize_to_interval,
+    )
+
+
+@router.get(
+    "/historical_latest",
+    response_model=Sequence[LatestFundingPoint],
+    summary="Latest settled historical funding rate per contract for a filter slice",
+)
+async def historical_latest(
+    session: SessionDep,
+    slice_: ContractSlice,
+    normalize_to_interval: NormalizeToInterval = NormalizeToInterval.D365,
+) -> Sequence[LatestFundingPoint]:
+    asset_names, section_names, quote_names = slice_
+    return await get_historical_latest(
+        session,
+        asset_names=asset_names,
+        section_names=section_names,
+        quote_names=quote_names,
+        normalize_to_interval=normalize_to_interval,
+    )
+
+
+@router.get(
+    "/historical_avg",
+    response_model=Sequence[HistoricalAvgEntry],
+    summary="Average historical funding per contract over one or more day windows",
+)
+async def historical_avg(
+    session: SessionDep,
+    slice_: ContractSlice,
+    windows: WindowsValidated,
+    normalize_to_interval: NormalizeToInterval = NormalizeToInterval.D365,
+) -> Sequence[HistoricalAvgEntry]:
+    asset_names, section_names, quote_names = slice_
+    return await get_historical_avg(
+        session,
+        asset_names=asset_names,
+        section_names=section_names,
+        quote_names=quote_names,
+        windows_days=windows,
+        normalize_to_interval=normalize_to_interval,
     )

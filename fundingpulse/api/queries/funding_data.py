@@ -15,6 +15,9 @@ from fundingpulse.api.dto.funding_data import (
     FundingRateDifference,
     FundingWallAsset,
     FundingWallResponse,
+    HistoricalAvgEntry,
+    HistoricalAvgWindow,
+    LatestFundingPoint,
     PaginatedCumulativeFundingDifference,
     PaginatedFundingRateDifference,
 )
@@ -473,6 +476,225 @@ async def get_funding_wall_historical_raw(
 
     assets = [FundingWallAsset.model_validate(data) for data in asset_data.values()]
     return FundingWallResponse(timestamp=to_ts, assets=assets, exchanges=section_names)
+
+
+_FILTERED_CONTRACTS_CTE = """
+filtered_contracts AS (
+    SELECT
+        contracts.id AS contract_id,
+        contracts.asset_name,
+        contracts.quote_name,
+        contracts.section_name,
+        contracts.funding_interval
+    FROM contract_enriched contracts
+    WHERE ('all' = ANY(:asset_names) OR contracts.asset_name = ANY(:asset_names))
+      AND ('all' = ANY(:section_names) OR contracts.section_name = ANY(:section_names))
+      AND ('all' = ANY(:quote_names) OR contracts.quote_name = ANY(:quote_names))
+)
+"""
+
+
+def _slice_params(
+    asset_names: list[str] | None,
+    section_names: list[str] | None,
+    quote_names: list[str] | None,
+) -> dict[str, list[str]]:
+    return {
+        "asset_names": asset_names if asset_names else ["all"],
+        "section_names": section_names if section_names else ["all"],
+        "quote_names": quote_names if quote_names else ["all"],
+    }
+
+
+def _normalization_params(normalize_to_interval: NormalizeToInterval) -> dict[str, float | bool]:
+    is_raw = normalize_to_interval == NormalizeToInterval.RAW
+    target_hours = (
+        1.0 if is_raw else FundingQueryComposer.calculate_target_hours(normalize_to_interval)
+    )
+    return {"is_raw": is_raw, "target_hours": target_hours}
+
+
+_LATEST_MULTIPLIER_SQL = (
+    "CASE WHEN :is_raw THEN 1.0 "
+    "WHEN fc.funding_interval > 0 THEN :target_hours / fc.funding_interval "
+    "ELSE 1.0 END"
+)
+
+
+async def get_live_latest(
+    session: AsyncSession,
+    asset_names: list[str] | None,
+    section_names: list[str] | None,
+    quote_names: list[str] | None,
+    normalize_to_interval: NormalizeToInterval,
+) -> Sequence[LatestFundingPoint]:
+    result = await session.execute(
+        text(
+            f"""
+            WITH {_FILTERED_CONTRACTS_CTE}
+            SELECT DISTINCT ON (fc.contract_id)
+                fc.contract_id,
+                fc.asset_name,
+                fc.section_name,
+                fc.quote_name,
+                fc.funding_interval,
+                (lfp.funding_rate * {_LATEST_MULTIPLIER_SQL}) AS funding_rate,
+                EXTRACT(EPOCH FROM lfp.timestamp)::bigint AS timestamp
+            FROM filtered_contracts fc
+            LEFT JOIN live_funding_point lfp
+                ON lfp.contract_id = fc.contract_id
+                AND lfp.timestamp >= NOW() - INTERVAL '10 minutes'
+            ORDER BY fc.contract_id, lfp.timestamp DESC NULLS LAST
+            """
+        ),
+        {
+            **_slice_params(asset_names, section_names, quote_names),
+            **_normalization_params(normalize_to_interval),
+        },
+    )
+    return [LatestFundingPoint.model_validate(row) for row in result.mappings().all()]
+
+
+async def get_historical_latest(
+    session: AsyncSession,
+    asset_names: list[str] | None,
+    section_names: list[str] | None,
+    quote_names: list[str] | None,
+    normalize_to_interval: NormalizeToInterval,
+) -> Sequence[LatestFundingPoint]:
+    # Contracts with no records in the last 30 days are considered invalid
+    # and returned with funding_rate=null, timestamp=null.
+    result = await session.execute(
+        text(
+            f"""
+            WITH {_FILTERED_CONTRACTS_CTE}
+            SELECT DISTINCT ON (fc.contract_id)
+                fc.contract_id,
+                fc.asset_name,
+                fc.section_name,
+                fc.quote_name,
+                fc.funding_interval,
+                (hfp.funding_rate * {_LATEST_MULTIPLIER_SQL}) AS funding_rate,
+                EXTRACT(EPOCH FROM hfp.timestamp)::bigint AS timestamp
+            FROM filtered_contracts fc
+            LEFT JOIN historical_funding_point hfp
+                ON hfp.contract_id = fc.contract_id
+                AND hfp.timestamp >= NOW() - INTERVAL '30 days'
+            ORDER BY fc.contract_id, hfp.timestamp DESC NULLS LAST
+            """
+        ),
+        {
+            **_slice_params(asset_names, section_names, quote_names),
+            **_normalization_params(normalize_to_interval),
+        },
+    )
+    return [LatestFundingPoint.model_validate(row) for row in result.mappings().all()]
+
+
+async def get_historical_avg(
+    session: AsyncSession,
+    asset_names: list[str] | None,
+    section_names: list[str] | None,
+    quote_names: list[str] | None,
+    windows_days: list[int],
+    normalize_to_interval: NormalizeToInterval,
+) -> Sequence[HistoricalAvgEntry]:
+    max_days = max(windows_days)
+    result = await session.execute(
+        text(
+            f"""
+            WITH {_FILTERED_CONTRACTS_CTE},
+            windows_cte AS (
+                SELECT unnest(cast(:windows_days as integer[])) AS days
+            ),
+            funding_pool AS (
+                SELECT
+                    fc.contract_id,
+                    fc.asset_name,
+                    fc.section_name,
+                    fc.quote_name,
+                    fc.funding_interval,
+                    hfp.funding_rate,
+                    hfp.timestamp
+                FROM filtered_contracts fc
+                LEFT JOIN historical_funding_point hfp
+                    ON hfp.contract_id = fc.contract_id
+                    AND hfp.timestamp >= NOW() - make_interval(days => :max_days)
+            ),
+            per_window AS (
+                SELECT
+                    fp.contract_id,
+                    fp.asset_name,
+                    fp.section_name,
+                    fp.quote_name,
+                    fp.funding_interval,
+                    w.days,
+                    AVG(fp.funding_rate) FILTER (
+                        WHERE fp.timestamp >= NOW() - make_interval(days => w.days)
+                    ) AS avg_rate,
+                    COUNT(fp.timestamp) FILTER (
+                        WHERE fp.timestamp >= NOW() - make_interval(days => w.days)
+                    ) AS points_count,
+                    MIN(fp.timestamp) FILTER (
+                        WHERE fp.timestamp >= NOW() - make_interval(days => w.days)
+                    ) AS oldest_ts
+                FROM funding_pool fp
+                CROSS JOIN windows_cte w
+                GROUP BY
+                    fp.contract_id, fp.asset_name, fp.section_name, fp.quote_name,
+                    fp.funding_interval, w.days
+            )
+            SELECT
+                contract_id,
+                asset_name,
+                section_name,
+                quote_name,
+                funding_interval,
+                days,
+                (avg_rate * CASE
+                    WHEN :is_raw THEN 1.0
+                    WHEN funding_interval > 0 THEN :target_hours / funding_interval
+                    ELSE 1.0
+                END) AS funding_rate,
+                points_count,
+                CEIL(24.0 * days / NULLIF(funding_interval, 0))::int AS expected_count,
+                EXTRACT(EPOCH FROM oldest_ts)::bigint AS oldest_timestamp
+            FROM per_window
+            ORDER BY asset_name, section_name, quote_name, days
+            """
+        ),
+        {
+            **_slice_params(asset_names, section_names, quote_names),
+            **_normalization_params(normalize_to_interval),
+            "windows_days": windows_days,
+            "max_days": max_days,
+        },
+    )
+
+    entries: dict[UUID, HistoricalAvgEntry] = {}
+    for row in result.mappings().all():
+        cid = row["contract_id"]
+        entry = entries.get(cid)
+        if entry is None:
+            entry = HistoricalAvgEntry(
+                contract_id=cid,
+                asset_name=row["asset_name"],
+                section_name=row["section_name"],
+                quote_name=row["quote_name"],
+                funding_interval=row["funding_interval"],
+                windows=[],
+            )
+            entries[cid] = entry
+        entry.windows.append(
+            HistoricalAvgWindow(
+                days=row["days"],
+                funding_rate=row["funding_rate"],
+                points_count=row["points_count"],
+                expected_count=row["expected_count"],
+                oldest_timestamp=row["oldest_timestamp"],
+            )
+        )
+    return list(entries.values())
 
 
 async def get_funding_wall_historical_normalized(
