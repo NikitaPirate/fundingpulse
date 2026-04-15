@@ -6,7 +6,6 @@ import styles from "../page.module.css";
 import type {
   FundingArbitrageFilters,
   FundingArbitrageResponse,
-  FundingArbitrageRow,
 } from "../_lib/types";
 
 type FundingArbitrageTableProps = {
@@ -33,17 +32,6 @@ function formatFundingValue(value: number) {
   return `${sign}${absValue.toFixed(4)}%`;
 }
 
-function formatHistoricalWindow(row: FundingArbitrageRow) {
-  if (row.kind !== "historical") {
-    return null;
-  }
-
-  const fromDate = new Date(row.alignedFrom * 1000).toISOString().slice(0, 10);
-  const toDate = new Date(row.alignedTo * 1000).toISOString().slice(0, 10);
-
-  return `${fromDate} → ${toDate}`;
-}
-
 function metricLabel(filters: FundingArbitrageFilters) {
   if (filters.period.type === "live") {
     return "Live";
@@ -52,12 +40,15 @@ function metricLabel(filters: FundingArbitrageFilters) {
   return filters.normalize === "raw" ? "Sum" : "Avg";
 }
 
-function totalPages(response: FundingArbitrageResponse | null) {
+function visibleRange(response: FundingArbitrageResponse | null) {
   if (!response) {
-    return 1;
+    return "Show 0-0 of 0";
   }
 
-  return Math.max(1, Math.ceil(response.totalCount / response.limit));
+  const start = response.offset;
+  const end = response.offset + response.data.length;
+
+  return `Show ${start}-${end} of ${response.totalCount}`;
 }
 
 export function FundingArbitrageTable({
@@ -67,7 +58,6 @@ export function FundingArbitrageTable({
   error,
   onPageChange,
 }: FundingArbitrageTableProps) {
-  const pageIndex = response ? Math.floor(response.offset / response.limit) + 1 : 1;
   const contractMetricLabel = metricLabel(filters);
 
   return (
@@ -125,9 +115,6 @@ export function FundingArbitrageTable({
                 >
                   <div className={styles.assetCell}>
                     <span className={styles.assetName}>{row.assetName}</span>
-                    <span className={styles.assetMeta}>
-                      {formatHistoricalWindow(row) ?? "Ranked opportunity"}
-                    </span>
                   </div>
 
                   <div className={styles.contractCell}>
@@ -167,9 +154,7 @@ export function FundingArbitrageTable({
       </div>
 
       <div className={styles.paginationBar}>
-        <span className={styles.paginationMeta}>
-          Page {pageIndex} of {totalPages(response)}
-        </span>
+        <span className={styles.paginationMeta}>{visibleRange(response)}</span>
 
         <div className={styles.paginationActions}>
           <button

@@ -52,13 +52,35 @@ describe("FundingArbitrageClient", () => {
     });
     const pairLinks = within(opportunitiesRegion).getAllByRole("link");
 
-    expect(pairLinks).toHaveLength(2);
-    expect(pairLinks[0]).toHaveTextContent("BTC");
-    expect(pairLinks[0]).toHaveTextContent("binance_usd-m");
-    expect(pairLinks[0]).toHaveTextContent("bybit");
-    expect(pairLinks[1]).toHaveTextContent("ETH");
-    expect(pairLinks[1]).toHaveTextContent("okx");
-    expect(pairLinks[1]).toHaveTextContent("bybit");
+    expect(pairLinks).toHaveLength(20);
+    expect(screen.getByText("120 ranked pairs")).toBeInTheDocument();
+    expect(opportunitiesRegion).toHaveTextContent("APT");
+    expect(opportunitiesRegion).toHaveTextContent("hyperliquid");
+    expect(opportunitiesRegion).toHaveTextContent("bitget");
+  });
+
+  test("filters the mock dataset through URL state", async () => {
+    currentSearchParams = new URLSearchParams([
+      ["assets", "BTC"],
+      ["quotes", "USDC"],
+    ]);
+
+    render(<FundingArbitrageClient />);
+
+    const opportunitiesRegion = await screen.findByRole("region", {
+      name: "Funding arbitrage opportunities",
+    });
+    const pairLinks = within(opportunitiesRegion).getAllByRole("link");
+
+    expect(pairLinks).toHaveLength(5);
+    expect(screen.getByText("5 ranked pairs")).toBeInTheDocument();
+
+    for (const pairLink of pairLinks) {
+      expect(pairLink).toHaveTextContent("BTC");
+      expect(pairLink).toHaveTextContent("USDC");
+    }
+
+    expect(opportunitiesRegion).not.toHaveTextContent("ETH");
   });
 
   test("shows empty state when the API returns no matches", async () => {

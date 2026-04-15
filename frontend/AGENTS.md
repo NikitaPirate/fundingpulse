@@ -32,3 +32,38 @@ The shared contract artifact lives in `contracts/openapi.json` at the repo root.
 - Treat `app/_generated/` as generated contract output. Do not hand-edit it.
 - Treat `public/mockServiceWorker.js` as a vendor/generated asset for MSW. Do not hand-edit it.
 - Contract regeneration depends on the Python/uv backend environment because OpenAPI is exported from FastAPI code, even though the generated TypeScript and tests live under `frontend/`.
+
+## Visual Contract
+
+`Funding Arbitrage` is the canonical implemented reference for FundingPulse data pages. New data-heavy pages should first feel visually native to it before they diverge for page-specific needs.
+
+This is not a loose inspiration. If a design decision conflicts with the current `Funding Arbitrage` grammar, the default assumption is that the new decision is wrong unless there is a concrete product reason to break it.
+
+## Style Invariants
+
+- Data pages must read as light structure on open canvas, not as a stack of boxed components.
+- Tables must hang in the page flow with lines and spacing, not inside outer cards, panels, or framed shells.
+- Headers, filter rows, table meta, and pagination must align to a coherent horizontal rail. Avoid jagged left edges and accidental indentation shifts between sections.
+- Filter triggers are light slots. They do not become heavy controls through filled backgrounds, shadows, accent borders, or decorative chrome.
+- Overlay surfaces that open above the page, such as dropdown panels and popovers, must be visually opaque enough to block underlying text. Trigger controls themselves should stay visually light unless there is a strong reason otherwise.
+- Secondary meta above tables stays as plain text. Do not convert it into chips, pills, badges, or status blocks.
+- Empty and error states stay quiet and textual. Do not introduce tinted banners or alert-card styling for routine states.
+- The page should preserve desktop-first density. Use horizontal space deliberately before increasing vertical stack height.
+- Repeated row content must read as grouped factual data. Do not let inner cell layout visually separate values that belong together, such as `exchange / quote / rate`.
+- Active emphasis must reflect real state changes only. Default controls should not look highlighted just because they exist.
+
+## Anti-Patterns
+
+- Do not add outer cards, boxed sections, panel shells, or table wrappers with their own visual surface.
+- Do not make filter rows visually heavy with fill, shadow, or ornamental borders.
+- Do not add decorative status strips, meta blocks, or top-right fillers with no functional meaning.
+- Do not use non-working UI as a placeholder. If a feature does not exist, it should not appear in the interface.
+- Do not solve density problems by stacking related inline facts vertically when the desktop layout has horizontal room.
+- Do not introduce multiple competing alignment rails across one page.
+
+## Funding Arbitrage Specifics
+
+- `Funding Arbitrage` is a ranked opportunity list, not a generic exploratory data grid.
+- User-driven sorting is out of scope unless explicitly added as a real feature. Default order comes from the API.
+- `Period = Live` must keep the green live indicator in the control itself.
+- Default `Normalization` should remain visually neutral. Accent appears only after the user leaves the default state.

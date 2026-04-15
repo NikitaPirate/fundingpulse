@@ -6,10 +6,6 @@
 }
 
 .header {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(24rem, 0.9fr);
-  gap: var(--space-lg);
-  align-items: end;
   padding: var(--space-md) var(--space-lg);
   border-bottom: var(--border-width) solid var(--color-border);
 }
@@ -33,7 +29,6 @@
   font-size: 0.86rem;
 }
 
-.headerLabel,
 .filterLabel {
   color: var(--color-text-soft);
   font-size: 0.72rem;
@@ -41,31 +36,11 @@
   text-transform: uppercase;
 }
 
-.headerValue {
-  color: var(--color-text);
-  font-size: 0.92rem;
-}
-
 .workspace {
   display: grid;
   grid-template-rows: auto 1fr;
   min-height: 0;
   gap: var(--space-sm);
-}
-
-.statusStrip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0;
-}
-
-.statusCell {
-  display: grid;
-  align-content: center;
-  gap: var(--space-xs);
-  min-height: 4.75rem;
-  padding: var(--space-md);
-  border-left: var(--border-width) solid var(--color-border);
 }
 
 .controlStrip,
@@ -76,7 +51,7 @@
 .controlStrip {
   display: grid;
   gap: var(--space-sm);
-  padding: 0 0 var(--space-sm);
+  padding: 0 var(--space-lg) var(--space-sm);
   border-bottom: var(--border-width) solid var(--color-border);
 }
 
@@ -87,6 +62,11 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--space-md);
+}
+
+.tableHeader,
+.paginationBar {
+  padding: 0 var(--space-lg);
 }
 
 .bandTitle {
@@ -189,13 +169,14 @@
   top: calc(100% + var(--space-xs));
   left: 0;
   z-index: calc(var(--z-nav) + 5);
+  isolation: isolate;
   display: grid;
   gap: var(--space-sm);
   width: min(24rem, calc(100vw - 2rem));
   padding: var(--space-sm);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-sm);
-  background: color-mix(in srgb, var(--color-surface-strong) 98%, transparent);
+  background: var(--color-background);
   box-shadow: var(--shadow-soft);
 }
 
@@ -241,6 +222,7 @@
   padding: var(--space-2xs);
   border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-sm);
+  background: transparent;
 }
 
 .optionRow {
@@ -392,7 +374,7 @@
 .tableRow,
 .tableRowSkeleton {
   display: grid;
-  grid-template-columns: 0.8fr 1.45fr 1.45fr 1fr 1fr;
+  grid-template-columns: 0.7fr 1.85fr 1.85fr 0.8fr 0.8fr;
   gap: var(--space-md);
   align-items: center;
 }
@@ -432,22 +414,33 @@
 
 .assetCell,
 .contractCell {
-  display: grid;
-  gap: var(--space-2xs);
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
   min-width: 0;
 }
 
+.assetCell {
+  gap: 0;
+}
+
+.contractCell {
+  justify-self: start;
+  max-width: 100%;
+}
+
 .assetName,
-.contractCell strong {
+.contractCell strong,
+.contractCell span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.assetMeta,
 .contractCell span {
   color: var(--color-text-muted);
   font-size: 0.83rem;
+  flex: 0 0 auto;
 }
 
 .contractMetric {
@@ -501,19 +494,6 @@
 }
 
 @media (max-width: 900px) {
-  .header {
-    grid-template-columns: 1fr;
-  }
-
-  .statusStrip {
-    grid-template-columns: 1fr;
-  }
-
-  .statusCell {
-    border-left: none;
-    border-top: var(--border-width) solid var(--color-border);
-  }
-
   .tableHeader,
   .paginationBar {
     flex-direction: column;
@@ -539,7 +519,7 @@
   .tableHead,
   .tableRow,
   .tableRowSkeleton {
-    min-width: 46rem;
+    min-width: 56rem;
   }
 }
 
@@ -550,6 +530,15 @@
 
   .header {
     padding: var(--space-sm);
+  }
+
+  .controlStrip {
+    padding-inline: var(--space-sm);
+  }
+
+  .tableHeader,
+  .paginationBar {
+    padding-inline: var(--space-sm);
   }
 
   .filtersGrid {
