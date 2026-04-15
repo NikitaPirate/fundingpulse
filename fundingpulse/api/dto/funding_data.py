@@ -72,6 +72,33 @@ class FundingPeriodSums(BaseModel):
     sum_365d: float | None
 
 
+class LatestFundingPoint(BaseModel):
+    contract_id: UUID
+    asset_name: str
+    section_name: str
+    quote_name: str
+    funding_interval: int
+    funding_rate: float
+    timestamp: int
+
+
+class HistoricalAvgWindow(BaseModel):
+    days: int
+    funding_rate: float | None
+    points_count: int
+    expected_count: int
+    oldest_timestamp: int | None
+
+
+class HistoricalAvgEntry(BaseModel):
+    contract_id: UUID
+    asset_name: str
+    section_name: str
+    quote_name: str
+    funding_interval: int
+    windows: list[HistoricalAvgWindow]
+
+
 class FundingWallAsset(BaseModel):
     asset: str
     market_cap_rank: int | None

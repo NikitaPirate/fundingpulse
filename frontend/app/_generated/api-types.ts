@@ -72,6 +72,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/funding-data/historical_avg": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Average historical funding per contract over one or more day windows */
+        get: operations["historical_avg_api_v0_funding_data_historical_avg_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/funding-data/historical_latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Latest settled historical funding rate per contract for a filter slice */
+        get: operations["historical_latest_api_v0_funding_data_historical_latest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/funding-data/historical_points": {
         parameters: {
             query?: never;
@@ -81,6 +115,23 @@ export interface paths {
         };
         /** Get historical funding points for a contract */
         get: operations["historical_points_api_v0_funding_data_historical_points_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v0/funding-data/live_latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Latest live funding rate per contract for a filter slice */
+        get: operations["live_latest_api_v0_funding_data_live_latest_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -479,6 +530,57 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** HistoricalAvgEntry */
+        HistoricalAvgEntry: {
+            /** Asset Name */
+            asset_name: string;
+            /**
+             * Contract Id
+             * Format: uuid
+             */
+            contract_id: string;
+            /** Funding Interval */
+            funding_interval: number;
+            /** Quote Name */
+            quote_name: string;
+            /** Section Name */
+            section_name: string;
+            /** Windows */
+            windows: components["schemas"]["HistoricalAvgWindow"][];
+        };
+        /** HistoricalAvgWindow */
+        HistoricalAvgWindow: {
+            /** Days */
+            days: number;
+            /** Expected Count */
+            expected_count: number;
+            /** Funding Rate */
+            funding_rate: number | null;
+            /** Oldest Timestamp */
+            oldest_timestamp: number | null;
+            /** Points Count */
+            points_count: number;
+        };
+        /** LatestFundingPoint */
+        LatestFundingPoint: {
+            /** Asset Name */
+            asset_name: string;
+            /**
+             * Contract Id
+             * Format: uuid
+             */
+            contract_id: string;
+            /** Funding Interval */
+            funding_interval: number;
+            /** Funding Rate */
+            funding_rate: number;
+            /** Quote Name */
+            quote_name: string;
+            /** Section Name */
+            section_name: string;
+            /** Timestamp */
+            timestamp: number;
+        };
         /**
          * NormalizeToInterval
          * @enum {string}
@@ -705,6 +807,76 @@ export interface operations {
             };
         };
     };
+    historical_avg_api_v0_funding_data_historical_avg_get: {
+        parameters: {
+            query: {
+                normalize_to_interval?: components["schemas"]["NormalizeToInterval"];
+                asset_names?: string[] | null;
+                section_names?: string[] | null;
+                quote_names?: string[] | null;
+                /** @description Window sizes in days, e.g. 7 30 90 */
+                windows: number[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoricalAvgEntry"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    historical_latest_api_v0_funding_data_historical_latest_get: {
+        parameters: {
+            query?: {
+                normalize_to_interval?: components["schemas"]["NormalizeToInterval"];
+                asset_names?: string[] | null;
+                section_names?: string[] | null;
+                quote_names?: string[] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LatestFundingPoint"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     historical_points_api_v0_funding_data_historical_points_get: {
         parameters: {
             query: {
@@ -726,6 +898,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FundingPoint"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    live_latest_api_v0_funding_data_live_latest_get: {
+        parameters: {
+            query?: {
+                normalize_to_interval?: components["schemas"]["NormalizeToInterval"];
+                asset_names?: string[] | null;
+                section_names?: string[] | null;
+                quote_names?: string[] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LatestFundingPoint"][];
                 };
             };
             /** @description Validation Error */
