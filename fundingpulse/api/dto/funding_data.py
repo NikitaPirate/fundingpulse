@@ -78,8 +78,8 @@ class LatestFundingPoint(BaseModel):
     section_name: str
     quote_name: str
     funding_interval: int
-    funding_rate: float
-    timestamp: int
+    funding_rate: float | None
+    timestamp: int | None
 
 
 class HistoricalAvgWindow(BaseModel):

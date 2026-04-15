@@ -739,8 +739,15 @@
             "type": "integer"
           },
           "funding_rate": {
-            "title": "Funding Rate",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Funding Rate"
           },
           "quote_name": {
             "title": "Quote Name",
@@ -751,8 +758,15 @@
             "type": "string"
           },
           "timestamp": {
-            "title": "Timestamp",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timestamp"
           }
         },
         "required": [

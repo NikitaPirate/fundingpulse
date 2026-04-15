@@ -573,13 +573,13 @@ export interface components {
             /** Funding Interval */
             funding_interval: number;
             /** Funding Rate */
-            funding_rate: number;
+            funding_rate: number | null;
             /** Quote Name */
             quote_name: string;
             /** Section Name */
             section_name: string;
             /** Timestamp */
-            timestamp: number;
+            timestamp: number | null;
         };
         /**
          * NormalizeToInterval

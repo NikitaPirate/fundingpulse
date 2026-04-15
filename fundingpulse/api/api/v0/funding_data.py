@@ -27,8 +27,11 @@ from fundingpulse.api.queries.funding_data import (
     get_funding_wall_historical_raw,
     get_funding_wall_live_normalized,
     get_funding_wall_live_raw,
+    get_historical_avg,
     get_historical_funding_differences_avg,
+    get_historical_latest,
     get_historical_points,
+    get_live_latest,
 )
 from fundingpulse.time import to_unix_seconds, utc_now
 
@@ -123,14 +126,7 @@ def validate_windows(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="window cannot exceed 365 days",
             )
-    # preserve order, drop duplicates
-    seen: set[int] = set()
-    unique: list[int] = []
-    for days in windows:
-        if days not in seen:
-            seen.add(days)
-            unique.append(days)
-    return unique
+    return sorted(set(windows))
 
 
 WindowsValidated = Annotated[list[int], Depends(validate_windows)]
@@ -376,7 +372,14 @@ async def live_latest(
     slice_: ContractSlice,
     normalize_to_interval: NormalizeToInterval = NormalizeToInterval.D365,
 ) -> Sequence[LatestFundingPoint]:
-    raise NotImplementedError
+    asset_names, section_names, quote_names = slice_
+    return await get_live_latest(
+        session,
+        asset_names=asset_names,
+        section_names=section_names,
+        quote_names=quote_names,
+        normalize_to_interval=normalize_to_interval,
+    )
 
 
 @router.get(
@@ -389,7 +392,14 @@ async def historical_latest(
     slice_: ContractSlice,
     normalize_to_interval: NormalizeToInterval = NormalizeToInterval.D365,
 ) -> Sequence[LatestFundingPoint]:
-    raise NotImplementedError
+    asset_names, section_names, quote_names = slice_
+    return await get_historical_latest(
+        session,
+        asset_names=asset_names,
+        section_names=section_names,
+        quote_names=quote_names,
+        normalize_to_interval=normalize_to_interval,
+    )
 
 
 @router.get(
@@ -403,4 +413,12 @@ async def historical_avg(
     windows: WindowsValidated,
     normalize_to_interval: NormalizeToInterval = NormalizeToInterval.D365,
 ) -> Sequence[HistoricalAvgEntry]:
-    raise NotImplementedError
+    asset_names, section_names, quote_names = slice_
+    return await get_historical_avg(
+        session,
+        asset_names=asset_names,
+        section_names=section_names,
+        quote_names=quote_names,
+        windows_days=windows,
+        normalize_to_interval=normalize_to_interval,
+    )
