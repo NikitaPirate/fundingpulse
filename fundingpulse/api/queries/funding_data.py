@@ -521,13 +521,18 @@ _LATEST_MULTIPLIER_SQL = (
 )
 
 
-async def get_live_latest(
+async def _get_latest(
     session: AsyncSession,
     asset_names: list[str] | None,
     section_names: list[str] | None,
     quote_names: list[str] | None,
     normalize_to_interval: NormalizeToInterval,
+    *,
+    source_table: str,
+    validity_interval: str,
 ) -> Sequence[LatestFundingPoint]:
+    # Contracts with no records within validity_interval are returned with
+    # funding_rate=null, timestamp=null (LEFT JOIN + NULLS LAST).
     result = await session.execute(
         text(
             f"""
@@ -538,13 +543,13 @@ async def get_live_latest(
                 fc.section_name,
                 fc.quote_name,
                 fc.funding_interval,
-                (lfp.funding_rate * {_LATEST_MULTIPLIER_SQL}) AS funding_rate,
-                EXTRACT(EPOCH FROM lfp.timestamp)::bigint AS timestamp
+                (fp.funding_rate * {_LATEST_MULTIPLIER_SQL}) AS funding_rate,
+                EXTRACT(EPOCH FROM fp.timestamp)::bigint AS timestamp
             FROM filtered_contracts fc
-            LEFT JOIN live_funding_point lfp
-                ON lfp.contract_id = fc.contract_id
-                AND lfp.timestamp >= NOW() - INTERVAL '10 minutes'
-            ORDER BY fc.contract_id, lfp.timestamp DESC NULLS LAST
+            LEFT JOIN {source_table} fp
+                ON fp.contract_id = fc.contract_id
+                AND fp.timestamp >= NOW() - INTERVAL '{validity_interval}'
+            ORDER BY fc.contract_id, fp.timestamp DESC NULLS LAST
             """
         ),
         {
@@ -553,6 +558,24 @@ async def get_live_latest(
         },
     )
     return [LatestFundingPoint.model_validate(row) for row in result.mappings().all()]
+
+
+async def get_live_latest(
+    session: AsyncSession,
+    asset_names: list[str] | None,
+    section_names: list[str] | None,
+    quote_names: list[str] | None,
+    normalize_to_interval: NormalizeToInterval,
+) -> Sequence[LatestFundingPoint]:
+    return await _get_latest(
+        session,
+        asset_names,
+        section_names,
+        quote_names,
+        normalize_to_interval,
+        source_table="live_funding_point",
+        validity_interval="10 minutes",
+    )
 
 
 async def get_historical_latest(
@@ -562,33 +585,15 @@ async def get_historical_latest(
     quote_names: list[str] | None,
     normalize_to_interval: NormalizeToInterval,
 ) -> Sequence[LatestFundingPoint]:
-    # Contracts with no records in the last 30 days are considered invalid
-    # and returned with funding_rate=null, timestamp=null.
-    result = await session.execute(
-        text(
-            f"""
-            WITH {_FILTERED_CONTRACTS_CTE}
-            SELECT DISTINCT ON (fc.contract_id)
-                fc.contract_id,
-                fc.asset_name,
-                fc.section_name,
-                fc.quote_name,
-                fc.funding_interval,
-                (hfp.funding_rate * {_LATEST_MULTIPLIER_SQL}) AS funding_rate,
-                EXTRACT(EPOCH FROM hfp.timestamp)::bigint AS timestamp
-            FROM filtered_contracts fc
-            LEFT JOIN historical_funding_point hfp
-                ON hfp.contract_id = fc.contract_id
-                AND hfp.timestamp >= NOW() - INTERVAL '30 days'
-            ORDER BY fc.contract_id, hfp.timestamp DESC NULLS LAST
-            """
-        ),
-        {
-            **_slice_params(asset_names, section_names, quote_names),
-            **_normalization_params(normalize_to_interval),
-        },
+    return await _get_latest(
+        session,
+        asset_names,
+        section_names,
+        quote_names,
+        normalize_to_interval,
+        source_table="historical_funding_point",
+        validity_interval="30 days",
     )
-    return [LatestFundingPoint.model_validate(row) for row in result.mappings().all()]
 
 
 async def get_historical_avg(

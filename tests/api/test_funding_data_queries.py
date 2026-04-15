@@ -11,7 +11,9 @@ from fundingpulse.api.queries.funding_data import (
     get_aggregated_live_points,
     get_cumulative_funding_differences,
     get_funding_rate_differences,
+    get_historical_avg,
     get_historical_funding_differences_avg,
+    get_historical_latest,
 )
 from fundingpulse.models import Contract, HistoricalFundingPoint, LiveFundingPoint
 from fundingpulse.time import to_unix_seconds, utc_datetime, utc_now
@@ -355,3 +357,122 @@ async def test_get_historical_funding_differences_avg_with_normalization(
             normalize_to_interval=NormalizeToInterval.RAW,
             asset_names=[asset_name],
         )
+
+
+@pytest.mark.asyncio
+async def test_get_historical_latest_returns_null_for_stale_contracts(
+    db_session: AsyncSession,
+    contract_factory: ContractFactory,
+) -> None:
+    asset_name = "BTC_HIST_LATEST"
+    fresh = await contract_factory(asset_name, "ExchangeFresh", "USDT", 8)
+    stale = await contract_factory(asset_name, "ExchangeStale", "USDT", 8)
+
+    now = utc_now()
+    db_session.add_all(
+        [
+            HistoricalFundingPoint(
+                contract_id=fresh.id,
+                funding_rate=0.001,
+                timestamp=now - timedelta(hours=1),
+            ),
+            HistoricalFundingPoint(
+                contract_id=stale.id,
+                funding_rate=0.002,
+                timestamp=now - timedelta(days=60),
+            ),
+        ]
+    )
+    await db_session.commit()
+
+    await db_session.execute(text("REFRESH MATERIALIZED VIEW contract_enriched;"))
+    await db_session.commit()
+
+    result = await get_historical_latest(
+        db_session,
+        asset_names=[asset_name],
+        section_names=None,
+        quote_names=None,
+        normalize_to_interval=NormalizeToInterval.D1,
+    )
+
+    by_section = {row.section_name: row for row in result}
+    assert set(by_section) == {"ExchangeFresh", "ExchangeStale"}
+
+    fresh_row = by_section["ExchangeFresh"]
+    assert fresh_row.funding_rate == pytest.approx(0.001 * 3.0)  # 8h -> 1d
+    assert fresh_row.timestamp is not None
+
+    stale_row = by_section["ExchangeStale"]
+    assert stale_row.funding_rate is None
+    assert stale_row.timestamp is None
+
+
+@pytest.mark.asyncio
+async def test_get_historical_avg_windows_and_normalization(
+    db_session: AsyncSession,
+    contract_factory: ContractFactory,
+) -> None:
+    asset_name = "BTC_HIST_AVG"
+    other_asset = "ETH_HIST_AVG_OTHER"
+
+    contract_8h = await contract_factory(asset_name, "ExchangeAvg8h", "USDT", 8)
+    contract_1h = await contract_factory(asset_name, "ExchangeAvg1h", "USDT", 1)
+    contract_other = await contract_factory(other_asset, "ExchangeOther", "USDT", 8)
+
+    now = utc_now()
+    points: list[HistoricalFundingPoint] = []
+    for i in range(1, 31):
+        ts = now - timedelta(days=i) + timedelta(hours=2)
+        points.append(
+            HistoricalFundingPoint(contract_id=contract_8h.id, funding_rate=0.001, timestamp=ts)
+        )
+        points.append(
+            HistoricalFundingPoint(contract_id=contract_1h.id, funding_rate=0.0001, timestamp=ts)
+        )
+    points.append(
+        HistoricalFundingPoint(
+            contract_id=contract_other.id,
+            funding_rate=0.5,
+            timestamp=now - timedelta(days=1),
+        )
+    )
+    db_session.add_all(points)
+    await db_session.commit()
+
+    await db_session.execute(text("REFRESH MATERIALIZED VIEW contract_enriched;"))
+    await db_session.commit()
+
+    result = await get_historical_avg(
+        db_session,
+        asset_names=[asset_name],
+        section_names=None,
+        quote_names=None,
+        windows_days=[7, 30],
+        normalize_to_interval=NormalizeToInterval.D1,
+    )
+
+    assert {entry.contract_id for entry in result} == {contract_8h.id, contract_1h.id}
+
+    by_contract = {entry.contract_id: entry for entry in result}
+
+    entry_8h = by_contract[contract_8h.id]
+    assert [w.days for w in entry_8h.windows] == [7, 30]
+    w7, w30 = entry_8h.windows
+    assert w7.points_count == 7
+    assert w7.expected_count == 21  # ceil(24*7/8)
+    assert w7.funding_rate == pytest.approx(0.001 * 3.0)  # 8h -> 1d
+    assert w7.oldest_timestamp is not None
+    assert w30.points_count == 30
+    assert w30.expected_count == 90  # ceil(24*30/8)
+    assert w30.funding_rate == pytest.approx(0.001 * 3.0)
+    assert w30.oldest_timestamp is not None
+    assert w30.oldest_timestamp < w7.oldest_timestamp
+
+    entry_1h = by_contract[contract_1h.id]
+    w7_1h, w30_1h = entry_1h.windows
+    assert w7_1h.points_count == 7
+    assert w7_1h.expected_count == 168  # ceil(24*7/1)
+    assert w7_1h.funding_rate == pytest.approx(0.0001 * 24.0)  # 1h -> 1d
+    assert w30_1h.points_count == 30
+    assert w30_1h.expected_count == 720
