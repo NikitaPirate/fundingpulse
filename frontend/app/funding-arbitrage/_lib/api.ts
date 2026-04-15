@@ -1,5 +1,14 @@
 "use client";
 
+import type {
+  HistoricalDifferenceRow,
+  HistoricalDifferencesResponse,
+  LiveDifferenceRow,
+  LiveDifferencesResponse,
+  MetaAssetsResponse,
+  MetaQuotesResponse,
+  MetaSectionsResponse,
+} from "../../_lib/api-contract";
 import { fetchApiJson } from "../../_lib/api";
 import { periodToApiRange, serializePeriod } from "./query-state";
 import type {
@@ -10,53 +19,6 @@ import type {
   FundingArbitrageRow,
 } from "./types";
 
-type ApiBaseResponse<T> = {
-  data: T;
-  meta?: Record<string, unknown> | null;
-};
-
-type ApiNameList = {
-  names: string[];
-};
-
-type ApiPaginatedResponse<T> = {
-  data: T[];
-  total_count: number;
-  offset: number;
-  limit: number;
-  has_more: boolean;
-};
-
-type ApiLiveRow = {
-  asset_name: string;
-  contract_1_id: string;
-  contract_1_section: string;
-  contract_1_quote: string;
-  contract_1_funding_rate: number;
-  contract_2_id: string;
-  contract_2_section: string;
-  contract_2_quote: string;
-  contract_2_funding_rate: number;
-  difference: number;
-  abs_difference: number;
-};
-
-type ApiHistoricalRow = {
-  asset_name: string;
-  contract_1_id: string;
-  contract_1_section: string;
-  contract_1_quote: string;
-  contract_1_total_funding: number;
-  contract_2_id: string;
-  contract_2_section: string;
-  contract_2_quote: string;
-  contract_2_total_funding: number;
-  difference: number;
-  abs_difference: number;
-  aligned_from: number;
-  aligned_to: number;
-};
-
 function createOptions(values: string[]): FilterOption[] {
   return values.map((value) => ({
     value,
@@ -64,7 +26,7 @@ function createOptions(values: string[]): FilterOption[] {
   }));
 }
 
-function mapLiveRow(row: ApiLiveRow): FundingArbitrageRow {
+function mapLiveRow(row: LiveDifferenceRow): FundingArbitrageRow {
   return {
     kind: "live",
     assetName: row.asset_name,
@@ -85,7 +47,7 @@ function mapLiveRow(row: ApiLiveRow): FundingArbitrageRow {
   };
 }
 
-function mapHistoricalRow(row: ApiHistoricalRow): FundingArbitrageRow {
+function mapHistoricalRow(row: HistoricalDifferenceRow): FundingArbitrageRow {
   return {
     kind: "historical",
     assetName: row.asset_name,
@@ -112,9 +74,9 @@ export async function fetchFundingArbitrageMeta(
   signal?: AbortSignal,
 ): Promise<FundingArbitrageMeta> {
   const [assetsResponse, sectionsResponse, quotesResponse] = await Promise.all([
-    fetchApiJson<ApiBaseResponse<ApiNameList>>("/api/v0/meta/assets", { signal }),
-    fetchApiJson<ApiBaseResponse<ApiNameList>>("/api/v0/meta/sections", { signal }),
-    fetchApiJson<ApiBaseResponse<ApiNameList>>("/api/v0/meta/quotes", { signal }),
+    fetchApiJson<MetaAssetsResponse>("/api/v0/meta/assets", { signal }),
+    fetchApiJson<MetaSectionsResponse>("/api/v0/meta/sections", { signal }),
+    fetchApiJson<MetaQuotesResponse>("/api/v0/meta/quotes", { signal }),
   ]);
 
   return {
@@ -168,7 +130,7 @@ export async function fetchFundingArbitrageRows(
     : `/api/v0/funding-data/diff/historical_differences?${params.toString()}`;
 
   if (isLive) {
-    const response = await fetchApiJson<ApiPaginatedResponse<ApiLiveRow>>(path, {
+    const response = await fetchApiJson<LiveDifferencesResponse>(path, {
       signal,
     });
 
@@ -181,7 +143,7 @@ export async function fetchFundingArbitrageRows(
     };
   }
 
-  const response = await fetchApiJson<ApiPaginatedResponse<ApiHistoricalRow>>(path, {
+  const response = await fetchApiJson<HistoricalDifferencesResponse>(path, {
     signal,
   });
 

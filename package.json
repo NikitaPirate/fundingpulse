@@ -1,0 +1,17 @@
+{
+  "name": "fundingpulse-workspace",
+  "private": true,
+  "scripts": {
+    "contract:export": "uv run python scripts/export_openapi.py",
+    "contract:types": "npm --prefix frontend exec -- openapi-typescript ./contracts/openapi.json -o ./frontend/app/_generated/api-types.ts",
+    "contract:sync": "npm run contract:export && npm run contract:types",
+    "frontend:contract:export": "npm run contract:export",
+    "frontend:contract:types": "npm run contract:types",
+    "frontend:contract:sync": "npm run contract:sync",
+    "frontend:dev": "npm --prefix frontend run dev",
+    "frontend:dev:mock": "npm --prefix frontend run dev:mock",
+    "frontend:build": "npm --prefix frontend run build",
+    "frontend:lint": "npm --prefix frontend run lint",
+    "frontend:test": "npm --prefix frontend run test"
+  }
+}

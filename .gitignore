@@ -75,4 +75,5 @@ frontend/node_modules/
 frontend/out/
 frontend/.vercel/
 frontend/.playwright-cli/
+frontend/*.tsbuildinfo
 frontend/*.png
