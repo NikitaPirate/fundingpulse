@@ -10,10 +10,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fundingpulse.api.db import SessionDep
 from fundingpulse.api.dto.enums import NormalizeToInterval
 from fundingpulse.api.dto.funding_data import (
-    FundingPeriodSums,
     FundingPoint,
     FundingWallResponse,
     HistoricalAvgEntry,
+    HistoricalSumsEntry,
     LatestFundingPoint,
     PaginatedCumulativeFundingDifference,
     PaginatedFundingRateDifference,
@@ -21,7 +21,6 @@ from fundingpulse.api.dto.funding_data import (
 from fundingpulse.api.queries.funding_data import (
     get_aggregated_live_points,
     get_cumulative_funding_differences,
-    get_funding_period_sums,
     get_funding_rate_differences,
     get_funding_wall_historical_normalized,
     get_funding_wall_historical_raw,
@@ -31,6 +30,7 @@ from fundingpulse.api.queries.funding_data import (
     get_historical_funding_differences_avg,
     get_historical_latest,
     get_historical_points,
+    get_historical_sums,
     get_live_latest,
 )
 from fundingpulse.time import to_unix_seconds, utc_now
@@ -176,15 +176,25 @@ async def live_points(
 
 
 @router.get(
-    "/period_sums/{contract_id}",
-    response_model=FundingPeriodSums,
-    summary="Get funding sums for different time periods for a specific contract",
+    "/historical_sums",
+    response_model=Sequence[HistoricalSumsEntry],
+    summary="Cumulative historical funding per contract over one or more day windows",
 )
-async def period_sums(
+async def historical_sums(
     session: SessionDep,
-    contract_id: UUID,
-) -> FundingPeriodSums:
-    return await get_funding_period_sums(session, contract_id)
+    slice_: ContractSlice,
+    windows: WindowsValidated,
+    normalize_to_interval: NormalizeToInterval = NormalizeToInterval.RAW,
+) -> Sequence[HistoricalSumsEntry]:
+    asset_names, section_names, quote_names = slice_
+    return await get_historical_sums(
+        session,
+        asset_names=asset_names,
+        section_names=section_names,
+        quote_names=quote_names,
+        windows_days=windows,
+        normalize_to_interval=normalize_to_interval,
+    )
 
 
 @router.get(

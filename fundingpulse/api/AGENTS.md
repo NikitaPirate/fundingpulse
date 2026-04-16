@@ -38,7 +38,7 @@ api/
 **Funding data** (`/funding-data`):
 - `GET /historical_points` — historical rates for one contract
 - `GET /live_points` — aggregated live rates for one contract (from `lfp_smart` continuous aggregate)
-- `GET /period_sums/{contract_id}` — cumulative sums for 7d/14d/30d/90d/180d/365d (with 98% completeness threshold)
+- `GET /historical_sums` — cumulative historical funding per contract over arbitrary day windows (with 98% completeness threshold)
 - `GET /diff/live_differences` — cross-exchange rate comparison using latest live data
 - `GET /diff/historical_differences` — cross-exchange rate comparison over time range
 - `GET /diff/historical_cumulative_differences` — cumulative funding diffs over time

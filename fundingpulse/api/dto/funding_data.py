@@ -59,19 +59,6 @@ class PaginatedCumulativeFundingDifference(PaginatedResponse[CumulativeFundingDi
     pass
 
 
-class FundingPeriodSums(BaseModel):
-    contract_id: UUID
-    asset_name: str
-    section_name: str
-    quote_name: str
-    sum_7d: float | None
-    sum_14d: float | None
-    sum_30d: float | None
-    sum_90d: float | None
-    sum_180d: float | None
-    sum_365d: float | None
-
-
 class LatestFundingPoint(BaseModel):
     contract_id: UUID
     asset_name: str
@@ -97,6 +84,23 @@ class HistoricalAvgEntry(BaseModel):
     quote_name: str
     funding_interval: int
     windows: list[HistoricalAvgWindow]
+
+
+class HistoricalSumsWindow(BaseModel):
+    days: int
+    funding_rate: float | None
+    points_count: int
+    expected_count: int
+    oldest_timestamp: int | None
+
+
+class HistoricalSumsEntry(BaseModel):
+    contract_id: UUID
+    asset_name: str
+    section_name: str
+    quote_name: str
+    funding_interval: int
+    windows: list[HistoricalSumsWindow]
 
 
 class FundingWallAsset(BaseModel):
