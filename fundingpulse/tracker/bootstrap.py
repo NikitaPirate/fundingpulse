@@ -16,6 +16,7 @@ from fundingpulse.tracker.db import SessionFactory, setup_db_session
 from fundingpulse.tracker.exchanges import EXCHANGES
 from fundingpulse.tracker.materialized_view_refresher import MaterializedViewRefresher
 from fundingpulse.tracker.orchestration import ExchangeOrchestrator
+from fundingpulse.tracker.services.asset_ranking import update_rankings
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +49,11 @@ async def bootstrap(
         mv_refresher=mv_refresher,
         concurrency_limit=concurrency_limit,
     )
-    _register_service_jobs(scheduler=scheduler, mv_refresher=mv_refresher)
+    _register_service_jobs(
+        scheduler=scheduler,
+        mv_refresher=mv_refresher,
+        session_factory=session_factory,
+    )
 
     logger.info(
         "Bootstrap complete: %s exchange(s), %s job(s)",
@@ -165,7 +170,9 @@ def _register_live_job(
 
 
 def _register_service_jobs(
-    scheduler: AsyncIOScheduler, mv_refresher: MaterializedViewRefresher
+    scheduler: AsyncIOScheduler,
+    mv_refresher: MaterializedViewRefresher,
+    session_factory: SessionFactory,
 ) -> None:
     """Register process-wide background jobs."""
     scheduler.add_job(
@@ -174,3 +181,16 @@ def _register_service_jobs(
         name="materialized_views_refresher",
     )
     logger.info("Registered materialized view refresher (every second)")
+
+    scheduler.add_job(
+        update_rankings,
+        args=[session_factory],
+        trigger=OrTrigger(
+            [
+                DateTrigger(run_date=utc_now(), timezone=UTC),
+                CronTrigger(hour=14, minute=30, timezone=UTC),
+            ]
+        ),
+        name="asset_ranking_update",
+    )
+    logger.info("Registered asset ranking update (immediate + daily 14:30 UTC)")
