@@ -1,0 +1,83 @@
+.chartFrame {
+  display: grid;
+  gap: var(--space-sm);
+}
+
+.chartHost {
+  min-height: 18rem;
+}
+
+.chartState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 18rem;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.legend {
+  display: grid;
+  gap: var(--space-xs);
+  padding-top: var(--space-sm);
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+.legendHeader {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.legendRows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-md);
+}
+
+.legendRow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.legendDot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.legendLabel {
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
+
+.legendValue {
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+
+.toggleGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 1px;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-pill);
+}
+
+.toggleButton {
+  padding: 0.36rem 0.7rem;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.toggleButtonActive {
+  background: var(--color-placeholder);
+  color: var(--color-text);
+}

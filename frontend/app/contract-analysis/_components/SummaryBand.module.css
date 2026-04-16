@@ -1,0 +1,144 @@
+.summaryBand {
+  display: grid;
+  gap: var(--space-sm);
+  padding: 0 var(--space-lg) var(--space-sm);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.summaryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.bandTitle {
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.message {
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+}
+
+.cardsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-xs);
+}
+
+.summaryCard {
+  display: grid;
+  grid-template-rows: auto auto auto auto auto;
+  align-content: start;
+  gap: var(--space-sm);
+  min-height: 24rem;
+  padding: var(--space-sm);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.cardTop {
+  display: grid;
+  gap: var(--space-2xs);
+}
+
+.cardTitle,
+.headlineLabel,
+.windowLabel,
+.windowKey {
+  color: var(--color-text-soft);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cardSubtitle {
+  color: var(--color-text);
+  font-size: 0.92rem;
+}
+
+.metricsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-xs);
+}
+
+.metricBlock {
+  display: grid;
+  gap: var(--space-2xs);
+  min-height: 4.2rem;
+  padding: var(--space-xs) var(--space-sm);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.headlineMeta {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+.windowRow {
+  display: grid;
+  gap: var(--space-xs);
+}
+
+.windowValues {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--space-xs);
+}
+
+.windowCell {
+  display: grid;
+  gap: var(--space-2xs);
+  min-height: 3.5rem;
+  padding: var(--space-xs) var(--space-sm);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.metricPositive {
+  color: #76e8b4;
+}
+
+.metricNegative {
+  color: #ff8f8f;
+}
+
+.metricMuted {
+  color: var(--color-text-soft);
+}
+
+.cardNote {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+@media (max-width: 1000px) {
+  .cardsGrid,
+  .metricsGrid,
+  .windowValues {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .summaryBand {
+    padding-inline: var(--space-sm);
+  }
+
+  .cardsGrid,
+  .metricsGrid,
+  .windowValues {
+    grid-template-columns: 1fr;
+  }
+
+  .summaryCard {
+    min-height: auto;
+  }
+}

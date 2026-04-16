@@ -1,3 +1,5 @@
+@import "uplot/dist/uPlot.min.css";
+
 :root {
   --font-ui: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
   --font-display: "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
@@ -53,6 +55,9 @@ html[data-theme="dark"] {
   --color-toggle-bg: rgba(16, 25, 36, 0.92);
   --color-toggle-thumb: rgba(138, 216, 255, 0.18);
   --color-grid-line: rgba(127, 152, 176, 0.03);
+  --color-chart-primary: #7be0ff;
+  --color-chart-secondary: #ff9d95;
+  --color-chart-spread: #f5c76c;
 }
 
 html[data-theme="light"] {
@@ -79,6 +84,9 @@ html[data-theme="light"] {
   --color-toggle-bg: rgba(255, 255, 255, 0.48);
   --color-toggle-thumb: rgba(18, 119, 168, 0.12);
   --color-grid-line: rgba(127, 152, 176, 0.018);
+  --color-chart-primary: #1277a8;
+  --color-chart-secondary: #d45b51;
+  --color-chart-spread: #ab7a14;
 }
 
 * {

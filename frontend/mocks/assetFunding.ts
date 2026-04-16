@@ -13,7 +13,7 @@ export function apiUrl(path: string) {
   return buildApiUrl(path);
 }
 
-type MockContract = {
+export type MockContract = {
   contractId: string;
   assetName: string;
   sectionName: string;
@@ -31,13 +31,13 @@ type MockContract = {
 const ASSET_NAMES = defaultFundingArbitrageFixtures.assets.data.names;
 const SECTION_NAMES = defaultFundingArbitrageFixtures.sections.data.names;
 const QUOTE_NAMES = defaultFundingArbitrageFixtures.quotes.data.names;
-const NOW_TS = Date.UTC(2026, 3, 15, 12, 0, 0) / 1000;
+export const NOW_TS = Date.UTC(2026, 3, 15, 12, 0, 0) / 1000;
 
 function createContractId(assetName: string, sectionName: string, quoteName: string) {
   return `${assetName.toLowerCase()}-${sectionName}-${quoteName.toLowerCase()}`;
 }
 
-function applyNormalization(
+export function applyNormalization(
   rawValue: number | null,
   fundingInterval: number,
   normalizeToInterval: string | null,
@@ -125,7 +125,7 @@ function buildHistoricalAvgEntry(
   };
 }
 
-function parseRequestedWindows(searchParams: URLSearchParams) {
+export function parseRequestedWindows(searchParams: URLSearchParams) {
   const windows = searchParams
     .getAll("windows")
     .map((value) => Number.parseInt(value, 10))
@@ -134,7 +134,38 @@ function parseRequestedWindows(searchParams: URLSearchParams) {
   return windows.length > 0 ? windows : [7, 30, 90];
 }
 
-function selectContracts(searchParams: URLSearchParams) {
+export function historicalAvgRawForWindow(contract: MockContract, days: number) {
+  if (days === 7) {
+    return contract.avg7dRaw;
+  }
+
+  if (days === 14) {
+    return contract.avg7dRaw === null ? null : contract.avg7dRaw * 0.92;
+  }
+
+  if (days === 30) {
+    return contract.avg30dRaw;
+  }
+
+  if (days === 90) {
+    return contract.avg90dRaw;
+  }
+
+  if (days === 180) {
+    return contract.avg90dRaw === null ? null : contract.avg90dRaw * 0.78;
+  }
+
+  if (days === 365) {
+    return contract.avg90dRaw === null ? null : contract.avg90dRaw * 0.62;
+  }
+
+  const fallback =
+    contract.avg30dRaw ?? contract.avg90dRaw ?? contract.lastSettledRaw ?? contract.liveRaw;
+
+  return fallback === null ? null : fallback * (30 / Math.max(days, 30));
+}
+
+export function selectContracts(searchParams: URLSearchParams) {
   const assets = new Set(searchParams.getAll("asset_names").filter(Boolean));
   const sections = new Set(searchParams.getAll("section_names").filter(Boolean));
   const quotes = new Set(searchParams.getAll("quote_names").filter(Boolean));
@@ -154,6 +185,10 @@ function selectContracts(searchParams: URLSearchParams) {
 
     return true;
   });
+}
+
+export function getMockContract(contractId: string) {
+  return mockContracts.find((contract) => contract.contractId === contractId) ?? null;
 }
 
 export function buildLiveLatestFixture(searchParams: URLSearchParams): LiveLatestResponse {
@@ -209,11 +244,7 @@ export function buildHistoricalAvgFixture(
       windows: requestedWindows.map((days) => ({
         days,
         funding_rate: applyNormalization(
-          days === 7
-            ? contract.avg7dRaw
-            : days === 30
-              ? contract.avg30dRaw
-              : contract.avg90dRaw,
+          historicalAvgRawForWindow(contract, days),
           contract.fundingInterval,
           searchParams.get("normalize_to_interval"),
         ),
@@ -225,7 +256,7 @@ export function buildHistoricalAvgFixture(
   );
 }
 
-const mockContracts: MockContract[] = ASSET_NAMES.flatMap((assetName, assetIndex) =>
+export const mockContracts: MockContract[] = ASSET_NAMES.flatMap((assetName, assetIndex) =>
   SECTION_NAMES.flatMap((sectionName, sectionIndex) =>
     QUOTE_NAMES.map((quoteName, quoteIndex) => {
       const contractIndex =
