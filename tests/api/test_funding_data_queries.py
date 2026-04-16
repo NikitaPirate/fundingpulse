@@ -14,6 +14,7 @@ from fundingpulse.api.queries.funding_data import (
     get_historical_avg,
     get_historical_funding_differences_avg,
     get_historical_latest,
+    get_historical_sums,
 )
 from fundingpulse.models import Contract, HistoricalFundingPoint, LiveFundingPoint
 from fundingpulse.time import to_unix_seconds, utc_datetime, utc_now
@@ -476,3 +477,68 @@ async def test_get_historical_avg_windows_and_normalization(
     assert w7_1h.funding_rate == pytest.approx(0.0001 * 24.0)  # 1h -> 1d
     assert w30_1h.points_count == 30
     assert w30_1h.expected_count == 720
+
+
+@pytest.mark.asyncio
+async def test_get_historical_sums_coverage_and_values(
+    db_session: AsyncSession,
+    contract_factory: ContractFactory,
+) -> None:
+    asset_name = "BTC_HIST_SUMS"
+
+    contract_full = await contract_factory(asset_name, "ExchangeFull", "USDT", 8)
+    contract_sparse = await contract_factory(asset_name, "ExchangeSparse", "USDT", 8)
+
+    now = utc_now()
+    points: list[HistoricalFundingPoint] = []
+
+    # Full coverage: 1 point per 8h for 7 days = 21 points (matches expected)
+    for i in range(21):
+        points.append(
+            HistoricalFundingPoint(
+                contract_id=contract_full.id,
+                funding_rate=0.001,
+                timestamp=now - timedelta(hours=8 * i, minutes=30),
+            )
+        )
+
+    # Sparse coverage: only 5 points in 7 days (well below 98% of 21)
+    for i in range(5):
+        points.append(
+            HistoricalFundingPoint(
+                contract_id=contract_sparse.id,
+                funding_rate=0.002,
+                timestamp=now - timedelta(days=i + 1),
+            )
+        )
+
+    db_session.add_all(points)
+    await db_session.commit()
+
+    await db_session.execute(text("REFRESH MATERIALIZED VIEW contract_enriched;"))
+    await db_session.commit()
+
+    result = await get_historical_sums(
+        db_session,
+        asset_names=[asset_name],
+        section_names=None,
+        quote_names=None,
+        windows_days=[7],
+        normalize_to_interval=NormalizeToInterval.RAW,
+    )
+
+    by_contract = {entry.contract_id: entry for entry in result}
+
+    full_entry = by_contract[contract_full.id]
+    assert len(full_entry.windows) == 1
+    w = full_entry.windows[0]
+    assert w.days == 7
+    assert w.points_count == 21
+    assert w.expected_count == 21
+    assert w.funding_rate == pytest.approx(0.001 * 21)
+
+    sparse_entry = by_contract[contract_sparse.id]
+    w_sparse = sparse_entry.windows[0]
+    assert w_sparse.points_count == 5
+    assert w_sparse.expected_count == 21
+    assert w_sparse.funding_rate is None

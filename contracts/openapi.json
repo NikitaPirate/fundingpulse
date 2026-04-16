@@ -361,107 +361,6 @@
         "title": "CumulativeFundingDifference",
         "type": "object"
       },
-      "FundingPeriodSums": {
-        "properties": {
-          "asset_name": {
-            "title": "Asset Name",
-            "type": "string"
-          },
-          "contract_id": {
-            "format": "uuid",
-            "title": "Contract Id",
-            "type": "string"
-          },
-          "quote_name": {
-            "title": "Quote Name",
-            "type": "string"
-          },
-          "section_name": {
-            "title": "Section Name",
-            "type": "string"
-          },
-          "sum_14d": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sum 14D"
-          },
-          "sum_180d": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sum 180D"
-          },
-          "sum_30d": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sum 30D"
-          },
-          "sum_365d": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sum 365D"
-          },
-          "sum_7d": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sum 7D"
-          },
-          "sum_90d": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sum 90D"
-          }
-        },
-        "required": [
-          "contract_id",
-          "asset_name",
-          "section_name",
-          "quote_name",
-          "sum_7d",
-          "sum_14d",
-          "sum_30d",
-          "sum_90d",
-          "sum_180d",
-          "sum_365d"
-        ],
-        "title": "FundingPeriodSums",
-        "type": "object"
-      },
       "FundingPoint": {
         "description": "A single funding rate point.",
         "properties": {
@@ -721,6 +620,95 @@
           "oldest_timestamp"
         ],
         "title": "HistoricalAvgWindow",
+        "type": "object"
+      },
+      "HistoricalSumsEntry": {
+        "properties": {
+          "asset_name": {
+            "title": "Asset Name",
+            "type": "string"
+          },
+          "contract_id": {
+            "format": "uuid",
+            "title": "Contract Id",
+            "type": "string"
+          },
+          "funding_interval": {
+            "title": "Funding Interval",
+            "type": "integer"
+          },
+          "quote_name": {
+            "title": "Quote Name",
+            "type": "string"
+          },
+          "section_name": {
+            "title": "Section Name",
+            "type": "string"
+          },
+          "windows": {
+            "items": {
+              "$ref": "#/components/schemas/HistoricalSumsWindow"
+            },
+            "title": "Windows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "contract_id",
+          "asset_name",
+          "section_name",
+          "quote_name",
+          "funding_interval",
+          "windows"
+        ],
+        "title": "HistoricalSumsEntry",
+        "type": "object"
+      },
+      "HistoricalSumsWindow": {
+        "properties": {
+          "days": {
+            "title": "Days",
+            "type": "integer"
+          },
+          "expected_count": {
+            "title": "Expected Count",
+            "type": "integer"
+          },
+          "funding_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Funding Rate"
+          },
+          "oldest_timestamp": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oldest Timestamp"
+          },
+          "points_count": {
+            "title": "Points Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "days",
+          "funding_rate",
+          "points_count",
+          "expected_count",
+          "oldest_timestamp"
+        ],
+        "title": "HistoricalSumsWindow",
         "type": "object"
       },
       "LatestFundingPoint": {
@@ -1876,6 +1864,123 @@
         ]
       }
     },
+    "/api/v0/funding-data/historical_sums": {
+      "get": {
+        "operationId": "historical_sums_api_v0_funding_data_historical_sums_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "normalize_to_interval",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/NormalizeToInterval",
+              "default": "raw"
+            }
+          },
+          {
+            "in": "query",
+            "name": "asset_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Asset Names"
+            }
+          },
+          {
+            "in": "query",
+            "name": "section_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Section Names"
+            }
+          },
+          {
+            "in": "query",
+            "name": "quote_names",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Quote Names"
+            }
+          },
+          {
+            "description": "Window sizes in days, e.g. 7 30 90",
+            "in": "query",
+            "name": "windows",
+            "required": true,
+            "schema": {
+              "description": "Window sizes in days, e.g. 7 30 90",
+              "items": {
+                "type": "integer"
+              },
+              "title": "Windows",
+              "type": "array"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/HistoricalSumsEntry"
+                  },
+                  "title": "Response Historical Sums Api V0 Funding Data Historical Sums Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cumulative historical funding per contract over one or more day windows",
+        "tags": [
+          "funding-data"
+        ]
+      }
+    },
     "/api/v0/funding-data/live_latest": {
       "get": {
         "operationId": "live_latest_api_v0_funding_data_live_latest_get",
@@ -2048,49 +2153,6 @@
           }
         },
         "summary": "Get aggregated live funding points for a contract",
-        "tags": [
-          "funding-data"
-        ]
-      }
-    },
-    "/api/v0/funding-data/period_sums/{contract_id}": {
-      "get": {
-        "operationId": "period_sums_api_v0_funding_data_period_sums__contract_id__get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "contract_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Contract Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FundingPeriodSums"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get funding sums for different time periods for a specific contract",
         "tags": [
           "funding-data"
         ]

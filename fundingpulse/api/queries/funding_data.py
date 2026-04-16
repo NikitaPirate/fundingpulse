@@ -10,13 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from fundingpulse.api.dto.enums import NormalizeToInterval
 from fundingpulse.api.dto.funding_data import (
     CumulativeFundingDifference,
-    FundingPeriodSums,
     FundingPoint,
     FundingRateDifference,
     FundingWallAsset,
     FundingWallResponse,
     HistoricalAvgEntry,
     HistoricalAvgWindow,
+    HistoricalSumsEntry,
+    HistoricalSumsWindow,
     LatestFundingPoint,
     PaginatedCumulativeFundingDifference,
     PaginatedFundingRateDifference,
@@ -161,85 +162,6 @@ async def get_aggregated_live_points(
     )
 
     return [FundingPoint.model_validate(row) for row in result.mappings().all()]
-
-
-async def get_funding_period_sums(
-    session: AsyncSession,
-    contract_id: UUID,
-) -> FundingPeriodSums:
-    result = await session.execute(
-        text(
-            """
-            WITH period_data AS (
-                SELECT
-                    c.id AS contract_id,
-                    c.asset_name,
-                    s.name AS section_name,
-                    c.quote_name,
-                    c.funding_interval,
-                    hfp.funding_rate,
-                    hfp.timestamp,
-                    CASE WHEN hfp.timestamp >= NOW() - INTERVAL '7 days' THEN 1 ELSE 0 END AS within_7d,
-                    CASE WHEN hfp.timestamp >= NOW() - INTERVAL '14 days' THEN 1 ELSE 0 END AS within_14d,
-                    CASE WHEN hfp.timestamp >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END AS within_30d,
-                    CASE WHEN hfp.timestamp >= NOW() - INTERVAL '90 days' THEN 1 ELSE 0 END AS within_90d,
-                    CASE WHEN hfp.timestamp >= NOW() - INTERVAL '180 days' THEN 1 ELSE 0 END AS within_180d,
-                    CASE WHEN hfp.timestamp >= NOW() - INTERVAL '365 days' THEN 1 ELSE 0 END AS within_365d
-                FROM contract c
-                JOIN section s ON c.section_name = s.name
-                LEFT JOIN historical_funding_point hfp ON c.id = hfp.contract_id
-                    AND hfp.timestamp >= NOW() - INTERVAL '365 days'
-                WHERE c.id = :contract_id AND c.deprecated = false
-            ),
-            period_sums AS (
-                SELECT
-                    pd.contract_id,
-                    pd.asset_name,
-                    pd.section_name,
-                    pd.quote_name,
-                    pd.funding_interval,
-                    SUM(CASE WHEN pd.within_7d = 1 THEN pd.funding_rate ELSE 0 END) AS sum_7d_raw,
-                    SUM(CASE WHEN pd.within_14d = 1 THEN pd.funding_rate ELSE 0 END) AS sum_14d_raw,
-                    SUM(CASE WHEN pd.within_30d = 1 THEN pd.funding_rate ELSE 0 END) AS sum_30d_raw,
-                    SUM(CASE WHEN pd.within_90d = 1 THEN pd.funding_rate ELSE 0 END) AS sum_90d_raw,
-                    SUM(CASE WHEN pd.within_180d = 1 THEN pd.funding_rate ELSE 0 END) AS sum_180d_raw,
-                    SUM(CASE WHEN pd.within_365d = 1 THEN pd.funding_rate ELSE 0 END) AS sum_365d_raw,
-                    SUM(pd.within_7d) AS count_7d,
-                    SUM(pd.within_14d) AS count_14d,
-                    SUM(pd.within_30d) AS count_30d,
-                    SUM(pd.within_90d) AS count_90d,
-                    SUM(pd.within_180d) AS count_180d,
-                    SUM(pd.within_365d) AS count_365d,
-                    (24.0 * 7 / pd.funding_interval) AS expected_7d,
-                    (24.0 * 14 / pd.funding_interval) AS expected_14d,
-                    (24.0 * 30 / pd.funding_interval) AS expected_30d,
-                    (24.0 * 90 / pd.funding_interval) AS expected_90d,
-                    (24.0 * 180 / pd.funding_interval) AS expected_180d,
-                    (24.0 * 365 / pd.funding_interval) AS expected_365d
-                FROM period_data pd
-                GROUP BY pd.contract_id, pd.asset_name, pd.section_name, pd.quote_name, pd.funding_interval
-            )
-            SELECT
-                ps.contract_id,
-                ps.asset_name,
-                ps.section_name,
-                ps.quote_name,
-                CASE WHEN ps.count_7d >= ps.expected_7d * 0.98 THEN ps.sum_7d_raw ELSE NULL END AS sum_7d,
-                CASE WHEN ps.count_14d >= ps.expected_14d * 0.98 THEN ps.sum_14d_raw ELSE NULL END AS sum_14d,
-                CASE WHEN ps.count_30d >= ps.expected_30d * 0.98 THEN ps.sum_30d_raw ELSE NULL END AS sum_30d,
-                CASE WHEN ps.count_90d >= ps.expected_90d * 0.98 THEN ps.sum_90d_raw ELSE NULL END AS sum_90d,
-                CASE WHEN ps.count_180d >= ps.expected_180d * 0.98 THEN ps.sum_180d_raw ELSE NULL END AS sum_180d,
-                CASE WHEN ps.count_365d >= ps.expected_365d * 0.98 THEN ps.sum_365d_raw ELSE NULL END AS sum_365d
-            FROM period_sums ps;
-            """
-        ),
-        {"contract_id": contract_id},
-    )
-    row = result.mappings().first()
-    if not row:
-        raise ValueError(f"Contract with id {contract_id} not found or has no data.")
-
-    return FundingPeriodSums.model_validate(row)
 
 
 async def get_funding_rate_differences(
@@ -692,6 +614,116 @@ async def get_historical_avg(
             entries[cid] = entry
         entry.windows.append(
             HistoricalAvgWindow(
+                days=row["days"],
+                funding_rate=row["funding_rate"],
+                points_count=row["points_count"],
+                expected_count=row["expected_count"],
+                oldest_timestamp=row["oldest_timestamp"],
+            )
+        )
+    return list(entries.values())
+
+
+async def get_historical_sums(
+    session: AsyncSession,
+    asset_names: list[str] | None,
+    section_names: list[str] | None,
+    quote_names: list[str] | None,
+    windows_days: list[int],
+    normalize_to_interval: NormalizeToInterval,
+) -> Sequence[HistoricalSumsEntry]:
+    max_days = max(windows_days)
+    result = await session.execute(
+        text(
+            f"""
+            WITH {_FILTERED_CONTRACTS_CTE},
+            windows_cte AS (
+                SELECT unnest(cast(:windows_days as integer[])) AS days
+            ),
+            funding_pool AS (
+                SELECT
+                    fc.contract_id,
+                    fc.asset_name,
+                    fc.section_name,
+                    fc.quote_name,
+                    fc.funding_interval,
+                    hfp.funding_rate,
+                    hfp.timestamp
+                FROM filtered_contracts fc
+                LEFT JOIN historical_funding_point hfp
+                    ON hfp.contract_id = fc.contract_id
+                    AND hfp.timestamp >= NOW() - make_interval(days => :max_days)
+            ),
+            per_window AS (
+                SELECT
+                    fp.contract_id,
+                    fp.asset_name,
+                    fp.section_name,
+                    fp.quote_name,
+                    fp.funding_interval,
+                    w.days,
+                    SUM(fp.funding_rate) FILTER (
+                        WHERE fp.timestamp >= NOW() - make_interval(days => w.days)
+                    ) AS sum_rate,
+                    COUNT(fp.timestamp) FILTER (
+                        WHERE fp.timestamp >= NOW() - make_interval(days => w.days)
+                    ) AS points_count,
+                    MIN(fp.timestamp) FILTER (
+                        WHERE fp.timestamp >= NOW() - make_interval(days => w.days)
+                    ) AS oldest_ts
+                FROM funding_pool fp
+                CROSS JOIN windows_cte w
+                GROUP BY
+                    fp.contract_id, fp.asset_name, fp.section_name, fp.quote_name,
+                    fp.funding_interval, w.days
+            )
+            SELECT
+                contract_id,
+                asset_name,
+                section_name,
+                quote_name,
+                funding_interval,
+                days,
+                CASE
+                    WHEN points_count >= CEIL(24.0 * days / NULLIF(funding_interval, 0)) * 0.98
+                    THEN sum_rate * CASE
+                        WHEN :is_raw THEN 1.0
+                        WHEN funding_interval > 0 THEN :target_hours / funding_interval
+                        ELSE 1.0
+                    END
+                    ELSE NULL
+                END AS funding_rate,
+                points_count,
+                CEIL(24.0 * days / NULLIF(funding_interval, 0))::int AS expected_count,
+                EXTRACT(EPOCH FROM oldest_ts)::bigint AS oldest_timestamp
+            FROM per_window
+            ORDER BY asset_name, section_name, quote_name, days
+            """
+        ),
+        {
+            **_slice_params(asset_names, section_names, quote_names),
+            **_normalization_params(normalize_to_interval),
+            "windows_days": windows_days,
+            "max_days": max_days,
+        },
+    )
+
+    entries: dict[UUID, HistoricalSumsEntry] = {}
+    for row in result.mappings().all():
+        cid = row["contract_id"]
+        entry = entries.get(cid)
+        if entry is None:
+            entry = HistoricalSumsEntry(
+                contract_id=cid,
+                asset_name=row["asset_name"],
+                section_name=row["section_name"],
+                quote_name=row["quote_name"],
+                funding_interval=row["funding_interval"],
+                windows=[],
+            )
+            entries[cid] = entry
+        entry.windows.append(
+            HistoricalSumsWindow(
                 days=row["days"],
                 funding_rate=row["funding_rate"],
                 points_count=row["points_count"],

@@ -33,3 +33,19 @@ export type HistoricalAvgResponse =
   paths["/api/v0/funding-data/historical_avg"]["get"]["responses"][200]["content"]["application/json"];
 
 export type HistoricalAvgEntry = HistoricalAvgResponse[number];
+
+export type HistoricalSumsResponse =
+  paths["/api/v0/funding-data/historical_sums"]["get"]["responses"][200]["content"]["application/json"];
+
+export type HistoricalSumsEntry = HistoricalSumsResponse[number];
+
+export type FundingPointResponse =
+  paths["/api/v0/funding-data/live_points"]["get"]["responses"][200]["content"]["application/json"];
+
+export type FundingPointEntry = FundingPointResponse[number];
+
+export type ContractSearchResponse =
+  paths["/api/v0/meta/contracts/search"]["get"]["responses"][200]["content"]["application/json"];
+
+export type ContractMetaResponse =
+  paths["/api/v0/meta/contracts/{contract_id}"]["get"]["responses"][200]["content"]["application/json"];

@@ -1,0 +1,150 @@
+.summaryBand {
+  display: grid;
+  gap: var(--space-sm);
+  padding: 0 var(--space-lg) var(--space-sm);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.summaryHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.bandTitle {
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.message {
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+}
+
+.summaryScroller {
+  overflow-x: auto;
+  padding-bottom: var(--space-2xs);
+}
+
+.summaryMatrix {
+  display: grid;
+  grid-template-columns: minmax(7rem, 0.72fr) repeat(3, minmax(0, 1fr));
+  min-width: 58rem;
+  border-top: var(--border-width) solid var(--color-border);
+  border-left: var(--border-width) solid var(--color-border);
+}
+
+.cornerCell,
+.columnHeader,
+.rowHeader,
+.snapshotCell,
+.periodCell,
+.noteCell {
+  min-width: 0;
+  padding: var(--space-sm);
+  border-right: var(--border-width) solid var(--color-border);
+  border-bottom: var(--border-width) solid var(--color-border);
+}
+
+.cornerCell {
+  padding: 0;
+}
+
+.columnHeader,
+.rowHeader {
+  display: grid;
+  gap: var(--space-2xs);
+  align-content: start;
+}
+
+.columnTitle,
+.rowLabel,
+.rowMeta,
+.metricLabel {
+  color: var(--color-text-soft);
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.columnSubtitle {
+  color: var(--color-text);
+  font-size: 0.92rem;
+  min-width: 0;
+}
+
+.snapshotCell,
+.periodCell {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-sm);
+}
+
+.metricCluster {
+  display: grid;
+  gap: var(--space-2xs);
+  min-width: 0;
+}
+
+.metricValue {
+  font-size: 0.98rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.metricMeta {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.metricPositive {
+  color: #76e8b4;
+}
+
+.metricNegative {
+  color: #ff8f8f;
+}
+
+.metricMuted {
+  color: var(--color-text-soft);
+}
+
+.noteCell {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+@media (max-width: 1000px) {
+  .summaryBand {
+    padding-inline: var(--space-sm);
+  }
+
+  .summaryMatrix {
+    min-width: 52rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .summaryMatrix {
+    min-width: 46rem;
+  }
+
+  .cornerCell,
+  .columnHeader,
+  .rowHeader,
+  .snapshotCell,
+  .periodCell,
+  .noteCell {
+    padding: var(--space-xs);
+  }
+
+  .snapshotCell,
+  .periodCell {
+    gap: var(--space-xs);
+  }
+}

@@ -123,6 +123,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v0/funding-data/historical_sums": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cumulative historical funding per contract over one or more day windows */
+        get: operations["historical_sums_api_v0_funding_data_historical_sums_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v0/funding-data/live_latest": {
         parameters: {
             query?: never;
@@ -149,23 +166,6 @@ export interface paths {
         };
         /** Get aggregated live funding points for a contract */
         get: operations["live_points_api_v0_funding_data_live_points_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v0/funding-data/period_sums/{contract_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get funding sums for different time periods for a specific contract */
-        get: operations["period_sums_api_v0_funding_data_period_sums__contract_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -433,32 +433,6 @@ export interface components {
             /** Difference */
             difference: number;
         };
-        /** FundingPeriodSums */
-        FundingPeriodSums: {
-            /** Asset Name */
-            asset_name: string;
-            /**
-             * Contract Id
-             * Format: uuid
-             */
-            contract_id: string;
-            /** Quote Name */
-            quote_name: string;
-            /** Section Name */
-            section_name: string;
-            /** Sum 14D */
-            sum_14d: number | null;
-            /** Sum 180D */
-            sum_180d: number | null;
-            /** Sum 30D */
-            sum_30d: number | null;
-            /** Sum 365D */
-            sum_365d: number | null;
-            /** Sum 7D */
-            sum_7d: number | null;
-            /** Sum 90D */
-            sum_90d: number | null;
-        };
         /**
          * FundingPoint
          * @description A single funding rate point.
@@ -550,6 +524,37 @@ export interface components {
         };
         /** HistoricalAvgWindow */
         HistoricalAvgWindow: {
+            /** Days */
+            days: number;
+            /** Expected Count */
+            expected_count: number;
+            /** Funding Rate */
+            funding_rate: number | null;
+            /** Oldest Timestamp */
+            oldest_timestamp: number | null;
+            /** Points Count */
+            points_count: number;
+        };
+        /** HistoricalSumsEntry */
+        HistoricalSumsEntry: {
+            /** Asset Name */
+            asset_name: string;
+            /**
+             * Contract Id
+             * Format: uuid
+             */
+            contract_id: string;
+            /** Funding Interval */
+            funding_interval: number;
+            /** Quote Name */
+            quote_name: string;
+            /** Section Name */
+            section_name: string;
+            /** Windows */
+            windows: components["schemas"]["HistoricalSumsWindow"][];
+        };
+        /** HistoricalSumsWindow */
+        HistoricalSumsWindow: {
             /** Days */
             days: number;
             /** Expected Count */
@@ -911,6 +916,42 @@ export interface operations {
             };
         };
     };
+    historical_sums_api_v0_funding_data_historical_sums_get: {
+        parameters: {
+            query: {
+                normalize_to_interval?: components["schemas"]["NormalizeToInterval"];
+                asset_names?: string[] | null;
+                section_names?: string[] | null;
+                quote_names?: string[] | null;
+                /** @description Window sizes in days, e.g. 7 30 90 */
+                windows: number[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoricalSumsEntry"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     live_latest_api_v0_funding_data_live_latest_get: {
         parameters: {
             query?: {
@@ -966,37 +1007,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FundingPoint"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    period_sums_api_v0_funding_data_period_sums__contract_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                contract_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["FundingPeriodSums"];
                 };
             };
             /** @description Validation Error */
