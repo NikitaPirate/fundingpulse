@@ -25,81 +25,81 @@
   font-size: 0.86rem;
 }
 
-.cardsGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-xs);
+.summaryScroller {
+  overflow-x: auto;
+  padding-bottom: var(--space-2xs);
 }
 
-.summaryCard {
+.summaryMatrix {
   display: grid;
-  grid-template-rows: auto auto auto auto auto;
-  align-content: start;
-  gap: var(--space-sm);
-  min-height: 24rem;
+  grid-template-columns: minmax(7rem, 0.72fr) repeat(3, minmax(0, 1fr));
+  min-width: 58rem;
+  border-top: var(--border-width) solid var(--color-border);
+  border-left: var(--border-width) solid var(--color-border);
+}
+
+.cornerCell,
+.columnHeader,
+.rowHeader,
+.snapshotCell,
+.periodCell,
+.noteCell {
+  min-width: 0;
   padding: var(--space-sm);
-  border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-right: var(--border-width) solid var(--color-border);
+  border-bottom: var(--border-width) solid var(--color-border);
 }
 
-.cardTop {
+.cornerCell {
+  padding: 0;
+}
+
+.columnHeader,
+.rowHeader {
   display: grid;
   gap: var(--space-2xs);
+  align-content: start;
 }
 
-.cardTitle,
-.headlineLabel,
-.windowLabel,
-.windowKey {
+.columnTitle,
+.rowLabel,
+.rowMeta,
+.metricLabel {
   color: var(--color-text-soft);
   font-size: 0.72rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
-.cardSubtitle {
+.columnSubtitle {
   color: var(--color-text);
   font-size: 0.92rem;
+  min-width: 0;
 }
 
-.metricsGrid {
+.snapshotCell,
+.periodCell {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--space-xs);
+  gap: var(--space-sm);
 }
 
-.metricBlock {
+.metricCluster {
   display: grid;
   gap: var(--space-2xs);
-  min-height: 4.2rem;
-  padding: var(--space-xs) var(--space-sm);
-  border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-sm);
+  min-width: 0;
 }
 
-.headlineMeta {
+.metricValue {
+  font-size: 0.98rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.metricMeta {
   color: var(--color-text-muted);
   font-size: 0.78rem;
-}
-
-.windowRow {
-  display: grid;
-  gap: var(--space-xs);
-}
-
-.windowValues {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: var(--space-xs);
-}
-
-.windowCell {
-  display: grid;
-  gap: var(--space-2xs);
-  min-height: 3.5rem;
-  padding: var(--space-xs) var(--space-sm);
-  border: var(--border-width) solid var(--color-border);
-  border-radius: var(--radius-sm);
+  font-variant-numeric: tabular-nums;
 }
 
 .metricPositive {
@@ -114,31 +114,37 @@
   color: var(--color-text-soft);
 }
 
-.cardNote {
+.noteCell {
   color: var(--color-text-muted);
   font-size: 0.8rem;
 }
 
 @media (max-width: 1000px) {
-  .cardsGrid,
-  .metricsGrid,
-  .windowValues {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 640px) {
   .summaryBand {
     padding-inline: var(--space-sm);
   }
 
-  .cardsGrid,
-  .metricsGrid,
-  .windowValues {
-    grid-template-columns: 1fr;
+  .summaryMatrix {
+    min-width: 52rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .summaryMatrix {
+    min-width: 46rem;
   }
 
-  .summaryCard {
-    min-height: auto;
+  .cornerCell,
+  .columnHeader,
+  .rowHeader,
+  .snapshotCell,
+  .periodCell,
+  .noteCell {
+    padding: var(--space-xs);
+  }
+
+  .snapshotCell,
+  .periodCell {
+    gap: var(--space-xs);
   }
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { Fragment } from "react";
+
 import { formatFundingValue } from "../../_lib/formatFundingValue";
 import type {
   AnalysisMode,
@@ -64,40 +66,27 @@ function metricClassName(value: number | null) {
   return value >= 0 ? styles.metricPositive : styles.metricNegative;
 }
 
-function WindowRow({
+function MetricCluster({
   label,
-  values,
+  value,
+  meta,
 }: {
   label: string;
-  values: Record<WindowDays, number | null>;
+  value: number | null;
+  meta?: string;
 }) {
   return (
-    <div className={styles.windowRow}>
-      <span className={styles.windowLabel}>{label}</span>
-      <div className={styles.windowValues}>
-        {SUMMARY_WINDOWS.map((window) => (
-          <div className={styles.windowCell} key={window}>
-            <span className={styles.windowKey}>{window}d</span>
-            <span className={metricClassName(values[window])}>{formatMetric(values[window])}</span>
-          </div>
-        ))}
-      </div>
+    <div className={styles.metricCluster}>
+      <span className={styles.metricLabel}>{label}</span>
+      <strong className={`${styles.metricValue} ${metricClassName(value)}`}>
+        {formatMetric(value)}
+      </strong>
+      {meta ? <span className={styles.metricMeta}>{meta}</span> : null}
     </div>
   );
 }
 
-function SummaryCard({
-  title,
-  subtitle,
-  liveLabel,
-  liveValue,
-  settledLabel,
-  settledValue,
-  settledTimestamp,
-  avgValues,
-  totalValues,
-  note,
-}: {
+type SummaryColumn = {
   title: string;
   subtitle: string;
   liveLabel: string;
@@ -108,32 +97,7 @@ function SummaryCard({
   avgValues: Record<WindowDays, number | null>;
   totalValues: Record<WindowDays, number | null>;
   note?: string;
-}) {
-  return (
-    <article className={styles.summaryCard}>
-      <div className={styles.cardTop}>
-        <span className={styles.cardTitle}>{title}</span>
-        <strong className={styles.cardSubtitle}>{subtitle}</strong>
-      </div>
-
-      <div className={styles.metricsGrid}>
-        <div className={styles.metricBlock}>
-          <span className={styles.headlineLabel}>{liveLabel}</span>
-          <strong className={metricClassName(liveValue)}>{formatMetric(liveValue)}</strong>
-        </div>
-        <div className={styles.metricBlock}>
-          <span className={styles.headlineLabel}>{settledLabel}</span>
-          <strong className={metricClassName(settledValue)}>{formatMetric(settledValue)}</strong>
-          <span className={styles.headlineMeta}>{formatTimestamp(settledTimestamp)}</span>
-        </div>
-      </div>
-
-      <WindowRow label="Average by period" values={avgValues} />
-      <WindowRow label="Accumulated by period" values={totalValues} />
-      {note ? <span className={styles.cardNote}>{note}</span> : null}
-    </article>
-  );
-}
+};
 
 export function SummaryBand({
   mode,
@@ -150,6 +114,46 @@ export function SummaryBand({
   const secondaryMeta = mode === "pair" ? c2Meta : null;
   const secondarySummary = mode === "pair" ? c2Summary : null;
   const showSpread = mode === "pair";
+  const columns: SummaryColumn[] = [
+    {
+      title: "Contract 1",
+      subtitle: formatContractShort(primaryMeta),
+      liveLabel: "Current live",
+      liveValue: primarySummary?.liveRate ?? null,
+      settledLabel: "Last settled",
+      settledValue: primarySummary?.lastSettledRate ?? null,
+      settledTimestamp: primarySummary?.lastSettledTimestamp ?? null,
+      avgValues: primarySummary?.avgWindows ?? EMPTY_WINDOWS,
+      totalValues: primarySummary?.accumulatedWindows ?? EMPTY_WINDOWS,
+      note: primaryMeta ? undefined : "Choose a contract.",
+    },
+    {
+      title: "Contract 2",
+      subtitle: formatContractShort(secondaryMeta),
+      liveLabel: "Current live",
+      liveValue: secondarySummary?.liveRate ?? null,
+      settledLabel: "Last settled",
+      settledValue: secondarySummary?.lastSettledRate ?? null,
+      settledTimestamp: secondarySummary?.lastSettledTimestamp ?? null,
+      avgValues: secondarySummary?.avgWindows ?? EMPTY_WINDOWS,
+      totalValues: secondarySummary?.accumulatedWindows ?? EMPTY_WINDOWS,
+      note: showSpread ? undefined : "Add a second contract to compare side by side.",
+    },
+    {
+      title: "Spread",
+      subtitle: showSpread ? "c1 - c2" : "Awaiting comparison",
+      liveLabel: "Current spread",
+      liveValue: pairSummary?.currentSpread ?? null,
+      settledLabel: "Settled spread",
+      settledValue: pairSummary?.lastSettledSpread ?? null,
+      settledTimestamp: pairSummary?.lastSettledTimestamp ?? null,
+      avgValues: pairSummary?.avgSpreadWindows ?? EMPTY_WINDOWS,
+      totalValues: pairSummary?.accumulatedSpreadWindows ?? EMPTY_WINDOWS,
+      note: showSpread
+        ? "Spread is calculated as contract 1 minus contract 2."
+        : "Spread becomes available after you select two contracts.",
+    },
+  ];
 
   return (
     <section className={styles.summaryBand} aria-label="Contract analysis summary">
@@ -164,45 +168,55 @@ export function SummaryBand({
       ) : loading ? (
         <div className={styles.message}>Loading summary…</div>
       ) : (
-        <div className={styles.cardsGrid}>
-          <SummaryCard
-            avgValues={primarySummary?.avgWindows ?? EMPTY_WINDOWS}
-            liveLabel="Current live"
-            liveValue={primarySummary?.liveRate ?? null}
-            note={primaryMeta ? undefined : "Choose a contract"}
-            settledLabel="Last settled"
-            settledTimestamp={primarySummary?.lastSettledTimestamp ?? null}
-            settledValue={primarySummary?.lastSettledRate ?? null}
-            subtitle={formatContractShort(primaryMeta)}
-            title="Contract 1"
-            totalValues={primarySummary?.accumulatedWindows ?? EMPTY_WINDOWS}
-          />
+        <div className={styles.summaryScroller}>
+          <div className={styles.summaryMatrix}>
+            <div className={styles.cornerCell} aria-hidden="true" />
+            {columns.map((column) => (
+              <div className={styles.columnHeader} key={column.title}>
+                <span className={styles.columnTitle}>{column.title}</span>
+                <strong className={styles.columnSubtitle}>{column.subtitle}</strong>
+              </div>
+            ))}
 
-          <SummaryCard
-            avgValues={secondarySummary?.avgWindows ?? EMPTY_WINDOWS}
-            liveLabel="Current live"
-            liveValue={secondarySummary?.liveRate ?? null}
-            note={showSpread ? undefined : "Add a second contract to compare funding side by side."}
-            settledLabel="Last settled"
-            settledTimestamp={secondarySummary?.lastSettledTimestamp ?? null}
-            settledValue={secondarySummary?.lastSettledRate ?? null}
-            subtitle={formatContractShort(secondaryMeta)}
-            title="Contract 2"
-            totalValues={secondarySummary?.accumulatedWindows ?? EMPTY_WINDOWS}
-          />
+            <div className={styles.rowHeader}>
+              <span className={styles.rowLabel}>Now</span>
+              <span className={styles.rowMeta}>Live / settled</span>
+            </div>
+            {columns.map((column) => (
+              <div className={styles.snapshotCell} key={`${column.title}-now`}>
+                <MetricCluster label={column.liveLabel} value={column.liveValue} />
+                <MetricCluster
+                  label={column.settledLabel}
+                  meta={formatTimestamp(column.settledTimestamp)}
+                  value={column.settledValue}
+                />
+              </div>
+            ))}
 
-          <SummaryCard
-            avgValues={pairSummary?.avgSpreadWindows ?? EMPTY_WINDOWS}
-            liveLabel="Current spread"
-            liveValue={pairSummary?.currentSpread ?? null}
-            note={showSpread ? "Spread is calculated as contract 1 minus contract 2." : "Spread becomes available after you select two contracts."}
-            settledLabel="Settled spread"
-            settledTimestamp={pairSummary?.lastSettledTimestamp ?? null}
-            settledValue={pairSummary?.lastSettledSpread ?? null}
-            subtitle={showSpread ? "c1 - c2" : "Awaiting comparison"}
-            title="Spread"
-            totalValues={pairSummary?.accumulatedSpreadWindows ?? EMPTY_WINDOWS}
-          />
+            {SUMMARY_WINDOWS.map((window) => (
+              <Fragment key={window}>
+                <div className={styles.rowHeader}>
+                  <span className={styles.rowLabel}>{window}d</span>
+                  <span className={styles.rowMeta}>Average / accumulated</span>
+                </div>
+                {columns.map((column) => (
+                  <div className={styles.periodCell} key={`${column.title}-${window}`}>
+                    <MetricCluster label="Average" value={column.avgValues[window]} />
+                    <MetricCluster label="Accumulated" value={column.totalValues[window]} />
+                  </div>
+                ))}
+              </Fragment>
+            ))}
+
+            <div className={styles.rowHeader}>
+              <span className={styles.rowLabel}>Context</span>
+            </div>
+            {columns.map((column) => (
+              <div className={styles.noteCell} key={`${column.title}-note`}>
+                {column.note ?? <span aria-hidden="true">&nbsp;</span>}
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </section>
