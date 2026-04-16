@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type uPlot from "uplot";
 
 import {
@@ -28,7 +28,10 @@ type FundingChartProps = {
   error?: string | null;
   emptyMessage: string;
   height?: number;
+  defaultVisibleDays?: number;
 };
+
+const SECONDS_PER_DAY = 24 * 60 * 60;
 
 function getThemeColors(): ThemeColors {
   const computed = getComputedStyle(document.documentElement);
@@ -484,8 +487,9 @@ export function FundingChart({
   error = null,
   emptyMessage,
   height = 320,
+  defaultVisibleDays,
 }: FundingChartProps) {
-  const shellRef = useRef<HTMLDivElement | null>(null);
+  const [shellElement, setShellElement] = useState<HTMLDivElement | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<uPlot | null>(null);
   const [width, setWidth] = useState(0);
@@ -517,12 +521,17 @@ export function FundingChart({
     };
   }, [alignedData]);
 
+  const shellRef = useCallback((node: HTMLDivElement | null) => {
+    setShellElement(node);
+  }, []);
+
   useEffect(() => {
-    if (!shellRef.current) {
+    if (!shellElement) {
+      setWidth(0);
       return;
     }
 
-    const element = shellRef.current;
+    const element = shellElement;
     const updateWidth = () => {
       setWidth(Math.max(0, Math.floor(element.getBoundingClientRect().width)));
     };
@@ -537,7 +546,7 @@ export function FundingChart({
     const observer = new ResizeObserver(updateWidth);
     observer.observe(element);
     return () => observer.disconnect();
-  }, []);
+  }, [shellElement]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -749,7 +758,15 @@ export function FundingChart({
         },
       };
 
-      chartRef.current = new UPlot(options, alignedData, hostRef.current);
+      const chart = new UPlot(options, alignedData, hostRef.current);
+      if (defaultVisibleDays && rangeSeconds > defaultVisibleDays * SECONDS_PER_DAY) {
+        chart.setScale("x", {
+          min: Math.max(dataRange.min, dataRange.max - defaultVisibleDays * SECONDS_PER_DAY),
+          max: dataRange.max,
+        });
+      }
+
+      chartRef.current = chart;
     }
 
     void mountChart();
@@ -761,6 +778,7 @@ export function FundingChart({
     alignedData,
     dataRange.max,
     dataRange.min,
+    defaultVisibleDays,
     hasData,
     height,
     lastIdxs,

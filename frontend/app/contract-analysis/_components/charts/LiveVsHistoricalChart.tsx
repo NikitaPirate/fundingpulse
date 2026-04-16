@@ -26,6 +26,7 @@ export function LiveVsHistoricalChart({
 
   return (
     <FundingChart
+      defaultVisibleDays={14}
       emptyMessage="No overlapping live or historical points for this contract."
       error={liveError ?? historicalError}
       loading={liveLoading || historicalLoading}

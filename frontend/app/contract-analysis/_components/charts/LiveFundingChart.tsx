@@ -57,6 +57,7 @@ export function LiveFundingChart({
     <>
       {pairMode ? <SpreadToggle onChange={setDisplayMode} value={displayMode} /> : null}
       <FundingChart
+        defaultVisibleDays={7}
         emptyMessage="No live funding points for the selected contract window."
         error={error}
         loading={loading}

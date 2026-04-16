@@ -59,6 +59,7 @@ export function HistoricalFundingChart({
     <>
       {pairMode ? <SpreadToggle onChange={setDisplayMode} value={displayMode} /> : null}
       <FundingChart
+        defaultVisibleDays={30}
         emptyMessage="No historical funding points for the selected contract window."
         error={error}
         loading={loading}
