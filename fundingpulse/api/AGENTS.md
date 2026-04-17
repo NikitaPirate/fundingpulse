@@ -7,8 +7,8 @@ Read-only FastAPI service serving funding rate data from TimescaleDB.
 ```
 api/
 ├── main.py              — FastAPI app, lifespan, CORS, error handler
-├── db.py                — app-owned DB resources + SessionDep dependency
-├── settings.py          — pydantic-settings for API config
+├── db.py                — FastAPI session dependency + app.state bridge
+├── settings.py          — pydantic-settings for API config + DB runtime builder
 ├── api/v0/
 │   ├── router.py        — v0 router aggregating sub-routers
 │   ├── meta.py          — /meta/* endpoints (assets, sections, quotes, contract search)
@@ -63,4 +63,4 @@ Key SQL views:
 
 ## Database access
 
-Direct async sessions via `SessionDep` (FastAPI Depends). The app owns engine/session_factory in lifespan and exposes only the session dependency to handlers. No UoW pattern — read-only service doesn't need transaction management.
+Direct async sessions via `SessionDep` (FastAPI Depends). The app creates one process-scoped `SessionFactory` in lifespan via the shared `fundingpulse.db` runtime and exposes only the session dependency to handlers. No UoW pattern — read-only service doesn't need transaction management.

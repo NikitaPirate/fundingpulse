@@ -11,6 +11,9 @@ from typing import Any, Literal
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from fundingpulse.db import DBRuntimeConfig
+from fundingpulse.db_settings import DBSettings
+
 load_dotenv()
 
 
@@ -56,6 +59,33 @@ class CORSSettings(BaseSettings):
 @lru_cache
 def get_api_db_tuning() -> APIDBTuning:
     return APIDBTuning()
+
+
+def _resolve_engine_kwargs(service_engine_kwargs: dict[str, Any] | None) -> dict[str, Any]:
+    defaults = {
+        "echo": False,
+        "pool_pre_ping": True,
+        "pool_size": 10,
+        "max_overflow": 50,
+    }
+    return {**defaults, **(service_engine_kwargs or {})}
+
+
+def _resolve_session_kwargs(service_session_kwargs: dict[str, Any] | None) -> dict[str, Any]:
+    defaults = {
+        "expire_on_commit": False,
+    }
+    return {**defaults, **(service_session_kwargs or {})}
+
+
+@lru_cache
+def get_api_db_runtime_config() -> DBRuntimeConfig:
+    tuning = get_api_db_tuning()
+    return DBRuntimeConfig(
+        connection_url=DBSettings().connection_url,  # pyright: ignore[reportCallIssue]
+        engine_kwargs=_resolve_engine_kwargs(tuning.engine_kwargs),
+        session_kwargs=_resolve_session_kwargs(tuning.session_kwargs),
+    )
 
 
 @lru_cache

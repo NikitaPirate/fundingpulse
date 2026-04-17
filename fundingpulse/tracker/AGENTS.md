@@ -5,7 +5,7 @@ Scheduler-based service that collects funding rates from crypto exchanges into T
 ## Data flow
 
 ```
-main.py → bootstrap.py → ExchangeOrchestrator (per exchange)
+main.py → DB runtime scope → bootstrap.py → ExchangeOrchestrator (per exchange)
                               ├── update()      — hourly + on startup
                               │   ├── _register_contracts() — sync contract list from exchange API
                               │   ├── _sync_contract()      — backfill full history (unsynced contracts)
@@ -15,7 +15,9 @@ main.py → bootstrap.py → ExchangeOrchestrator (per exchange)
 
 ## Key components
 
-**bootstrap.py** — wires everything: resolves exchanges, creates session factory, creates APScheduler, registers jobs. Each exchange gets two cron jobs: `{exchange}_update` (hourly) and `{exchange}_live` (every minute, staggered).
+**main.py** — owns the top-level DB runtime scope and shared HTTP client, then hands a ready `SessionFactory` to bootstrap.
+
+**bootstrap.py** — wires everything: resolves exchanges, creates APScheduler, registers jobs around the provided `SessionFactory`. Each exchange gets two cron jobs: `{exchange}_update` (hourly) and `{exchange}_live` (every minute, staggered).
 
 **ExchangeOrchestrator** — per-exchange coordinator. `update()` runs contract registration then processes all contracts concurrently (with semaphore). `update_live()` collects current rates. Both are scheduler job targets. All data operations are methods on the orchestrator:
 - `_register_contracts()` — calls exchange `get_contracts()`, upserts to DB, marks missing as deprecated, signals MV refresher.

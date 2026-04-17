@@ -4,15 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.combining import OrTrigger
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 
+from fundingpulse.db import SessionFactory
 from fundingpulse.time import UTC, utc_now
-from fundingpulse.tracker.db import SessionFactory, setup_db_session
 from fundingpulse.tracker.exchanges import EXCHANGES
 from fundingpulse.tracker.materialized_view_refresher import MaterializedViewRefresher
 from fundingpulse.tracker.orchestration import ExchangeOrchestrator
@@ -22,20 +21,13 @@ logger = logging.getLogger(__name__)
 
 
 async def bootstrap(
-    db_connection: str,
-    db_engine_kwargs: dict[str, Any],
-    db_session_kwargs: dict[str, Any],
+    session_factory: SessionFactory,
     exchanges: list[str] | None = None,
     concurrency_limit: int = 10,
     mv_refresher_debounce: int = 10,
 ) -> AsyncIOScheduler:
     """Build and return configured scheduler."""
     resolved_exchanges = _resolve_exchanges(exchanges)
-    session_factory = setup_db_session(
-        db_connection,
-        session_kwargs=db_session_kwargs,
-        engine_kwargs=db_engine_kwargs,
-    )
     mv_refresher = MaterializedViewRefresher(
         db=session_factory,
         debounce_seconds=mv_refresher_debounce,

@@ -8,8 +8,8 @@ from typing import Any
 from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from fundingpulse.db import SessionFactory
 from fundingpulse.models.asset import Asset
-from fundingpulse.tracker.db import SessionFactory
 from fundingpulse.tracker.infrastructure import http_client
 
 logger = logging.getLogger(__name__)

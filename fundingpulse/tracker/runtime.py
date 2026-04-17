@@ -7,6 +7,7 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
+from fundingpulse.db import DBRuntimeConfig
 from fundingpulse.tracker.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -16,9 +17,7 @@ logger = logging.getLogger(__name__)
 class RuntimeConfig:
     """Resolved startup configuration after CLI/ENV merge."""
 
-    db_connection: str
-    db_engine_kwargs: dict[str, Any]
-    db_session_kwargs: dict[str, Any]
+    db: DBRuntimeConfig
     exchanges: list[str] | None
     debug_exchanges: str | None
     debug_exchanges_live: str | None
@@ -63,9 +62,11 @@ def build_runtime_config(
         exchanges = None
 
     return RuntimeConfig(
-        db_connection=settings.db.connection_url,
-        db_engine_kwargs=_resolve_engine_kwargs(settings.db_tuning.engine_kwargs),
-        db_session_kwargs=_resolve_session_kwargs(settings.db_tuning.session_kwargs),
+        db=DBRuntimeConfig(
+            connection_url=settings.db.connection_url,
+            engine_kwargs=_resolve_engine_kwargs(settings.db_tuning.engine_kwargs),
+            session_kwargs=_resolve_session_kwargs(settings.db_tuning.session_kwargs),
+        ),
         exchanges=exchanges,
         debug_exchanges=debug_exchanges_arg,
         debug_exchanges_live=debug_exchanges_live_arg,

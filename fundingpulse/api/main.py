@@ -6,8 +6,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from fundingpulse.api.api.v0.router import router as v0_router
-from fundingpulse.api.db import dispose_app_db, install_db_resources
-from fundingpulse.api.settings import get_cors_settings
+from fundingpulse.api.db import APP_SESSION_FACTORY_KEY
+from fundingpulse.api.settings import get_api_db_runtime_config, get_cors_settings
+from fundingpulse.db import db_session_factory_scope
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,9 +20,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    install_db_resources(app)
-    yield
-    await dispose_app_db(app)
+    async with db_session_factory_scope(get_api_db_runtime_config()) as session_factory:
+        setattr(app.state, APP_SESSION_FACTORY_KEY, session_factory)
+        try:
+            yield
+        finally:
+            delattr(app.state, APP_SESSION_FACTORY_KEY)
 
 
 async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
