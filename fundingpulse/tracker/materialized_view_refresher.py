@@ -5,7 +5,7 @@ import time
 
 from sqlalchemy import text
 
-from fundingpulse.tracker.db import SessionFactory
+from fundingpulse.db import SessionFactory
 
 
 class MaterializedViewRefresher:

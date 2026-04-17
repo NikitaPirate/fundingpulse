@@ -5,7 +5,7 @@ Scheduler-based service that collects funding rates from crypto exchanges into T
 ## Data flow
 
 ```
-main.py → bootstrap.py → ExchangeOrchestrator (per exchange)
+main.py → DB runtime scope → bootstrap.py → ExchangeOrchestrator (per exchange)
                               ├── update()      — hourly + on startup
                               │   ├── _register_contracts() — sync contract list from exchange API
                               │   ├── _sync_contract()      — backfill full history (unsynced contracts)
@@ -15,7 +15,9 @@ main.py → bootstrap.py → ExchangeOrchestrator (per exchange)
 
 ## Key components
 
-**bootstrap.py** — wires everything: resolves exchanges, creates session factory, creates APScheduler, registers jobs. Each exchange gets two cron jobs: `{exchange}_update` (hourly) and `{exchange}_live` (every minute, staggered).
+**main.py** — owns the top-level DB runtime scope and shared HTTP client, then hands a ready `SessionFactory` to bootstrap.
+
+**bootstrap.py** — wires everything: resolves exchanges, creates APScheduler, registers jobs around the provided `SessionFactory`. Each exchange gets two cron jobs: `{exchange}_update` (hourly) and `{exchange}_live` (every minute, staggered).
 
 **ExchangeOrchestrator** — per-exchange coordinator. `update()` runs contract registration then processes all contracts concurrently (with semaphore). `update_live()` collects current rates. Both are scheduler job targets. All data operations are methods on the orchestrator:
 - `_register_contracts()` — calls exchange `get_contracts()`, upserts to DB, marks missing as deprecated, signals MV refresher.
@@ -52,10 +54,4 @@ Sessions are short-lived — opened and closed per DB operation to avoid holding
 
 ## Configuration
 
-`settings.py` — pydantic-settings from .env. Key env vars:
-- `EXCHANGES` — comma-separated exchange filter
-- `INSTANCE_ID` / `TOTAL_INSTANCES` — for multi-instance sharding (round-robin distribution)
-- `DEBUG_EXCHANGES` / `DEBUG_EXCHANGES_LIVE` — per-exchange log level control
-- DB connection via shared `DBSettings`
-
-`runtime.py` builds `RuntimeConfig` by merging CLI args and env vars. CLI takes precedence.
+`settings.py` defines the tracker config surface. The source of truth for variable names is `fundingpulse/tracker/settings.py` plus `.env.example`; shared DB credentials stay in `DB_*`, tracker knobs in `FT_*`, and docker fan-out in `FT_INSTANCE_COUNT`.

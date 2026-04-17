@@ -1,23 +1,45 @@
+"""Funding Data API configuration.
+
+Each subsystem is its own BaseSettings with one env_prefix. Consumers use cached
+providers instead of eager module-level instances, so importing the API surface
+stays cheap and DB-free.
+"""
+
+from functools import lru_cache
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from fundingpulse.settings import DBSettings
+from fundingpulse.db import DBRuntimeConfig
+from fundingpulse.db_settings import DBSettings
+
+load_dotenv()
+
+
+class APIDBTuning(BaseSettings):
+    """SQLAlchemy engine/session overrides for the API (FDA_DB_*)."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="FDA_DB_",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    engine_kwargs: dict[str, Any] | None = None
+    session_kwargs: dict[str, Any] | None = None
 
 
 class CORSSettings(BaseSettings):
-    """CORS middleware configuration.
+    """CORS middleware configuration (FDA_CORS_*).
 
-    All fields are Optional - None means use middleware default.
+    Every field is optional — None means fall back to middleware default.
     Use to_middleware_kwargs() to pass only explicitly set values.
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
         env_prefix="FDA_CORS_",
+        case_sensitive=False,
         extra="ignore",
     )
 
@@ -31,25 +53,41 @@ class CORSSettings(BaseSettings):
     max_age: int | None = None
 
     def to_middleware_kwargs(self) -> dict[str, object]:
-        """Returns only explicitly set parameters (filters None)."""
         return {k: v for k, v in self.model_dump().items() if v is not None}
 
 
-class FDADBSettings(DBSettings):
-    """Funding Data API DB settings with service-specific kwargs."""
-
-    engine_kwargs: dict[str, Any] | None = Field(default=None, alias="FDA_ENGINE_KWARGS")
-    session_kwargs: dict[str, Any] | None = Field(default=None, alias="FDA_SESSION_KWARGS")
+@lru_cache
+def get_api_db_tuning() -> APIDBTuning:
+    return APIDBTuning()
 
 
-class Settings(BaseModel):
-    """Funding Data API configuration."""
+def _resolve_engine_kwargs(service_engine_kwargs: dict[str, Any] | None) -> dict[str, Any]:
+    defaults = {
+        "echo": False,
+        "pool_pre_ping": True,
+        "pool_size": 10,
+        "max_overflow": 50,
+    }
+    return {**defaults, **(service_engine_kwargs or {})}
 
-    cors: CORSSettings
-    db: FDADBSettings
+
+def _resolve_session_kwargs(service_session_kwargs: dict[str, Any] | None) -> dict[str, Any]:
+    defaults = {
+        "expire_on_commit": False,
+    }
+    return {**defaults, **(service_session_kwargs or {})}
 
 
-settings = Settings(
-    cors=CORSSettings(),
-    db=FDADBSettings(),  # pyright: ignore[reportCallIssue]
-)
+@lru_cache
+def get_api_db_runtime_config() -> DBRuntimeConfig:
+    tuning = get_api_db_tuning()
+    return DBRuntimeConfig(
+        connection_url=DBSettings().connection_url,  # pyright: ignore[reportCallIssue]
+        engine_kwargs=_resolve_engine_kwargs(tuning.engine_kwargs),
+        session_kwargs=_resolve_session_kwargs(tuning.session_kwargs),
+    )
+
+
+@lru_cache
+def get_cors_settings() -> CORSSettings:
+    return CORSSettings()

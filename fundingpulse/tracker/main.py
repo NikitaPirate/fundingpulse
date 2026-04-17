@@ -5,10 +5,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import sys
-from typing import Any
 
-from dotenv import load_dotenv
-
+from fundingpulse.db import DBRuntimeConfig, db_session_factory_scope
 from fundingpulse.tracker.bootstrap import bootstrap
 from fundingpulse.tracker.cli import build_parser
 from fundingpulse.tracker.exchanges import EXCHANGES
@@ -19,41 +17,36 @@ from fundingpulse.tracker.logging_setup import (
     configure_logging,
 )
 from fundingpulse.tracker.runtime import build_runtime_config
-from fundingpulse.tracker.settings import Settings
+from fundingpulse.tracker.settings import build_settings
 
 logger = logging.getLogger(__name__)
 
 
 async def run_scheduler(
-    db_connection: str,
-    db_engine_kwargs: dict[str, Any],
-    db_session_kwargs: dict[str, Any],
+    db: DBRuntimeConfig,
     exchanges: list[str] | None,
 ) -> None:
     """Bootstrap and run scheduler forever."""
-    await http_client.startup()
-    try:
-        scheduler = await bootstrap(
-            db_connection=db_connection,
-            db_engine_kwargs=db_engine_kwargs,
-            db_session_kwargs=db_session_kwargs,
-            exchanges=exchanges,
-        )
-        scheduler.start()
-        logger.info("Scheduler started, waiting for jobs...")
-        await asyncio.Event().wait()
-    finally:
-        await http_client.shutdown()
+    async with db_session_factory_scope(db) as session_factory:
+        await http_client.startup()
+        try:
+            scheduler = await bootstrap(
+                session_factory=session_factory,
+                exchanges=exchanges,
+            )
+            scheduler.start()
+            logger.info("Scheduler started, waiting for jobs...")
+            await asyncio.Event().wait()
+        finally:
+            await http_client.shutdown()
 
 
 def main() -> None:
     """Main entrypoint used by CLI and supervisord."""
-    load_dotenv()
-
     args = build_parser().parse_args()
 
     try:
-        settings = Settings()  # type: ignore[call-arg]
+        settings = build_settings()
         config = build_runtime_config(args=args, settings=settings, all_exchanges=set(EXCHANGES))
     except Exception as exc:
         sys.exit(f"Configuration error: {exc}")
@@ -82,9 +75,7 @@ def main() -> None:
     try:
         asyncio.run(
             run_scheduler(
-                config.db_connection,
-                config.db_engine_kwargs,
-                config.db_session_kwargs,
+                config.db,
                 config.exchanges,
             )
         )

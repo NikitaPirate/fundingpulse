@@ -1,3 +1,16 @@
+# Run from the project root so compose picks up the sibling .env automatically:
+#   docker compose -f deploy/docker-compose.yml --env-file .env up
+# Or cd into deploy/ and symlink/copy .env there — compose needs an env file
+# next to the compose file for ${VAR} host-side substitution, and a second copy
+# inside containers via env_file. We keep a single source of truth by pointing
+# env_file at ../.env; host-side ${VAR}s below come from --env-file.
+x-app-env: &app-env
+  env_file:
+    - ../.env
+  # Docker-specific overrides only — everything else comes from ../.env.
+  environment:
+    DB_HOST: timescaledb
+
 services:
   timescaledb:
     image: timescale/timescaledb:2.23.0-pg18
@@ -17,47 +30,34 @@ services:
       retries: 5
 
   db-migrate:
+    <<: *app-env
     build:
       context: ..
       dockerfile: deploy/Dockerfile
       target: migrate
     container_name: fundingpulse-migrate
-    restart: on-failure
+    restart: "no"
     depends_on:
       timescaledb:
         condition: service_healthy
-    env_file:
-      - ../.env
-    environment:
-      DB_HOST: ${DB_HOST:?DB_HOST is required}
-      DB_PORT: ${DB_PORT:?DB_PORT is required}
-      DB_USER: ${DB_USER:?DB_USER is required}
-      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
-      DB_DBNAME: ${DB_DBNAME:?DB_DBNAME is required}
 
   tracker:
+    <<: *app-env
     build:
       context: ..
       dockerfile: deploy/Dockerfile
       target: tracker
     container_name: fundingpulse-tracker
     restart: unless-stopped
+    environment:
+      DB_HOST: timescaledb
+      FT_INSTANCE_COUNT: ${FT_INSTANCE_COUNT:-3}
     depends_on:
       db-migrate:
         condition: service_completed_successfully
-    environment:
-      DB_HOST: ${DB_HOST:?DB_HOST is required}
-      DB_PORT: ${DB_PORT:?DB_PORT is required}
-      DB_USER: ${DB_USER:?DB_USER is required}
-      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
-      DB_DBNAME: ${DB_DBNAME:?DB_DBNAME is required}
-      EXCHANGES: ${EXCHANGES:-}
-      DEBUG_EXCHANGES: ${DEBUG_EXCHANGES:-}
-      INSTANCE_COUNT: ${INSTANCE_COUNT:-3}
-    env_file:
-      - ../.env
 
   api:
+    <<: *app-env
     build:
       context: ..
       dockerfile: deploy/Dockerfile
@@ -69,14 +69,6 @@ services:
         condition: service_completed_successfully
     ports:
       - "${API_PORT:-8000}:8000"
-    environment:
-      DB_HOST: ${DB_HOST:?DB_HOST is required}
-      DB_PORT: ${DB_PORT:?DB_PORT is required}
-      DB_USER: ${DB_USER:?DB_USER is required}
-      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
-      DB_DBNAME: ${DB_DBNAME:?DB_DBNAME is required}
-    env_file:
-      - ../.env
 
 volumes:
   timescaledb_data:

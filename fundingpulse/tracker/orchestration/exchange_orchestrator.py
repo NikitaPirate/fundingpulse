@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
+from fundingpulse.db import SessionFactory
 from fundingpulse.models.asset import Asset
 from fundingpulse.models.contract import Contract
 from fundingpulse.models.historical_funding_point import HistoricalFundingPoint
@@ -13,7 +14,6 @@ from fundingpulse.models.live_funding_point import LiveFundingPoint
 from fundingpulse.models.quote import Quote
 from fundingpulse.models.section import Section
 from fundingpulse.time import UtcDateTime, utc_now
-from fundingpulse.tracker.db import SessionFactory
 from fundingpulse.tracker.db.contracts import get_active_by_section, get_by_section, upsert_many
 from fundingpulse.tracker.db.funding_points import get_newest_for_contract, get_oldest_for_contract
 from fundingpulse.tracker.db.utils import bulk_insert

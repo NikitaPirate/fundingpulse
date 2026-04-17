@@ -1,8 +1,8 @@
 """FundingPulse — crypto funding rate tracking platform."""
 
-from fundingpulse import models, settings
+from . import db_settings, models
 
 __all__ = [
+    "db_settings",
     "models",
-    "settings",
 ]
