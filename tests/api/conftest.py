@@ -16,17 +16,21 @@ def fda_db_env(db_config: DatabaseConfig) -> DatabaseConfig:
     os.environ["DB_USER"] = db_config.user
     os.environ["DB_PASSWORD"] = db_config.password
     os.environ["DB_DBNAME"] = db_config.dbname
-    os.environ["FDA_ENGINE_KWARGS"] = '{"pool_size":10,"max_overflow":50,"pool_pre_ping":true}'
-    os.environ["FDA_SESSION_KWARGS"] = '{"expire_on_commit":false}'
+    os.environ["FDA_DB_ENGINE_KWARGS"] = '{"pool_size":10,"max_overflow":50,"pool_pre_ping":true}'
+    os.environ["FDA_DB_SESSION_KWARGS"] = '{"expire_on_commit":false}'
     return db_config
 
 
 @pytest_asyncio.fixture
 async def db_session(fda_db_env: DatabaseConfig) -> AsyncIterator[AsyncSession]:
-    from fundingpulse.api.db import get_session
+    from fundingpulse.api.db import create_db_resources, dispose_db_resources, open_session
 
-    async for session in get_session():
-        yield session
+    resources = create_db_resources()
+    try:
+        async for session in open_session(resources.session_factory):
+            yield session
+    finally:
+        await dispose_db_resources(resources)
 
 
 @pytest_asyncio.fixture

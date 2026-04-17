@@ -64,7 +64,7 @@ class BaseExchange(ABC):
     def logger_live(self) -> logging.Logger:
         """Dedicated logger for live collection operations.
 
-        Enables independent live log control via DEBUG_EXCHANGES_LIVE or per-exchange:
+        Enables independent live log control via FT_DEBUG_EXCHANGES_LIVE or per-exchange:
         LOGLEVEL=funding_tracker.exchanges.{EXCHANGE_ID}.live:LEVEL
         """
         return logging.getLogger(f"funding_tracker.exchanges.{self.EXCHANGE_ID}.live")

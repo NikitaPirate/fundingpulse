@@ -7,8 +7,6 @@ import logging
 import sys
 from typing import Any
 
-from dotenv import load_dotenv
-
 from fundingpulse.tracker.bootstrap import bootstrap
 from fundingpulse.tracker.cli import build_parser
 from fundingpulse.tracker.exchanges import EXCHANGES
@@ -19,7 +17,7 @@ from fundingpulse.tracker.logging_setup import (
     configure_logging,
 )
 from fundingpulse.tracker.runtime import build_runtime_config
-from fundingpulse.tracker.settings import Settings
+from fundingpulse.tracker.settings import build_settings
 
 logger = logging.getLogger(__name__)
 
@@ -48,12 +46,10 @@ async def run_scheduler(
 
 def main() -> None:
     """Main entrypoint used by CLI and supervisord."""
-    load_dotenv()
-
     args = build_parser().parse_args()
 
     try:
-        settings = Settings()  # type: ignore[call-arg]
+        settings = build_settings()
         config = build_runtime_config(args=args, settings=settings, all_exchanges=set(EXCHANGES))
     except Exception as exc:
         sys.exit(f"Configuration error: {exc}")

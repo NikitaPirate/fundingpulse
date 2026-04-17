@@ -15,7 +15,7 @@ from fundingpulse.models import (  # noqa: F401
     Quote,
     Section,
 )
-from fundingpulse.settings import DBSettings
+from fundingpulse.db_settings import DBSettings
 
 alembic_postgresql_enum.set_configuration(
     alembic_postgresql_enum.Config(force_dialect_support=True)

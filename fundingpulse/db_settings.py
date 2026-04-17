@@ -1,29 +1,33 @@
-"""Database settings shared across applications."""
+"""Shared database connection settings (DB_* env namespace)."""
 
-from pydantic import Field
+from dotenv import load_dotenv
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL
 
+load_dotenv()
+
 
 class DBSettings(BaseSettings):
-    """Database connection settings loaded from DB_* environment variables."""
+    """Database credentials shared across services.
+
+    Used via composition, never subclassed — a child env_prefix would re-prefix
+    inherited fields and break the single source of truth for DB_*.
+    """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_prefix="DB_",
         case_sensitive=False,
         extra="ignore",
     )
 
-    host: str = Field(alias="DB_HOST")
-    port: int = Field(alias="DB_PORT")
-    user: str = Field(alias="DB_USER")
-    password: str = Field(alias="DB_PASSWORD")
-    dbname: str = Field(alias="DB_DBNAME")
+    host: str
+    port: int
+    user: str
+    password: str
+    dbname: str
 
     @property
     def connection_url(self) -> str:
-        """Build TimescaleDB SQLAlchemy URL."""
         return URL.create(
             "timescaledb+psycopg",
             username=self.user,

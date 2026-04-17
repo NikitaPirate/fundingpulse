@@ -30,26 +30,27 @@ def build_runtime_config(
     args: argparse.Namespace, settings: Settings, all_exchanges: set[str]
 ) -> RuntimeConfig:
     """Resolve final runtime configuration used by main()."""
-    exchanges_arg = args.exchanges if args.exchanges is not None else settings.exchanges
+    app = settings.app
+    exchanges_arg = args.exchanges if args.exchanges is not None else app.exchanges
     debug_exchanges_arg = (
-        args.debug_exchanges if args.debug_exchanges is not None else settings.debug_exchanges
+        args.debug_exchanges if args.debug_exchanges is not None else app.debug_exchanges
     )
     debug_exchanges_live_arg = (
         args.debug_exchanges_live
         if args.debug_exchanges_live is not None
-        else settings.debug_exchanges_live
+        else app.debug_exchanges_live
     )
-    instance_id = args.instance_id if args.instance_id is not None else settings.instance_id
+    instance_id = args.instance_id if args.instance_id is not None else app.instance_id
     total_instances = (
-        args.total_instances if args.total_instances is not None else settings.total_instances
+        args.total_instances if args.total_instances is not None else app.total_instances
     )
 
     if total_instances <= 0:
-        raise ValueError("TOTAL_INSTANCES must be greater than 0")
+        raise ValueError("FT_TOTAL_INSTANCES must be greater than 0")
     if instance_id < 0:
-        raise ValueError("INSTANCE_ID must be >= 0")
+        raise ValueError("FT_INSTANCE_ID must be >= 0")
     if instance_id >= total_instances:
-        raise ValueError("INSTANCE_ID must be less than TOTAL_INSTANCES")
+        raise ValueError("FT_INSTANCE_ID must be less than FT_TOTAL_INSTANCES")
 
     exchanges = _parse_exchanges_spec(exchanges_arg, all_exchanges)
 
@@ -62,9 +63,9 @@ def build_runtime_config(
         exchanges = None
 
     return RuntimeConfig(
-        db_connection=settings.db_connection,
-        db_engine_kwargs=_resolve_engine_kwargs(settings.db.engine_kwargs),
-        db_session_kwargs=_resolve_session_kwargs(settings.db.session_kwargs),
+        db_connection=settings.db.connection_url,
+        db_engine_kwargs=_resolve_engine_kwargs(settings.db_tuning.engine_kwargs),
+        db_session_kwargs=_resolve_session_kwargs(settings.db_tuning.session_kwargs),
         exchanges=exchanges,
         debug_exchanges=debug_exchanges_arg,
         debug_exchanges_live=debug_exchanges_live_arg,

@@ -1,40 +1,61 @@
-"""Environment-backed settings for funding tracker."""
+"""Funding tracker configuration.
 
-from functools import cached_property
+Composition, not inheritance: each subsystem is its own BaseSettings with exactly
+one env_prefix. The outer Settings is a plain BaseModel that wires them together.
+See AGENTS.md (Configuration) for the rules behind this layout.
+"""
+
 from typing import Any
 
-from pydantic import Field
+from dotenv import load_dotenv
+from pydantic import BaseModel
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from fundingpulse.settings import DBSettings
+from fundingpulse.db_settings import DBSettings
+
+load_dotenv()
 
 
-class FTDBSettings(DBSettings):
-    """Funding tracker DB settings with service-specific kwargs."""
-
-    engine_kwargs: dict[str, Any] | None = Field(default=None, alias="FT_ENGINE_KWARGS")
-    session_kwargs: dict[str, Any] | None = Field(default=None, alias="FT_SESSION_KWARGS")
-
-
-class Settings(BaseSettings):
-    """Application settings loaded from environment and .env."""
+class TrackerDBTuning(BaseSettings):
+    """SQLAlchemy engine/session overrides for the tracker (FT_DB_*)."""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
+        env_prefix="FT_DB_",
+        case_sensitive=False,
         extra="ignore",
     )
 
-    debug_exchanges: str | None = Field(default=None, alias="DEBUG_EXCHANGES")
-    debug_exchanges_live: str | None = Field(default=None, alias="DEBUG_EXCHANGES_LIVE")
-    exchanges: str | None = Field(default=None, alias="EXCHANGES")
-    instance_id: int = Field(default=0, alias="INSTANCE_ID")
-    total_instances: int = Field(default=1, alias="TOTAL_INSTANCES")
+    engine_kwargs: dict[str, Any] | None = None
+    session_kwargs: dict[str, Any] | None = None
 
-    @cached_property
-    def db(self) -> FTDBSettings:
-        return FTDBSettings()  # pyright: ignore[reportCallIssue]
 
-    @property
-    def db_connection(self) -> str:
-        return self.db.connection_url
+class TrackerAppSettings(BaseSettings):
+    """Tracker-specific knobs (FT_*)."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="FT_",
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    exchanges: str | None = None
+    debug_exchanges: str | None = None
+    debug_exchanges_live: str | None = None
+    instance_id: int = 0
+    total_instances: int = 1
+
+
+class Settings(BaseModel):
+    """Top-level tracker settings assembled by composition."""
+
+    db: DBSettings
+    db_tuning: TrackerDBTuning
+    app: TrackerAppSettings
+
+
+def build_settings() -> Settings:
+    return Settings(
+        db=DBSettings(),  # pyright: ignore[reportCallIssue]
+        db_tuning=TrackerDBTuning(),
+        app=TrackerAppSettings(),
+    )

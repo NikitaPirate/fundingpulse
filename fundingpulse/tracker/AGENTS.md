@@ -52,10 +52,4 @@ Sessions are short-lived — opened and closed per DB operation to avoid holding
 
 ## Configuration
 
-`settings.py` — pydantic-settings from .env. Key env vars:
-- `EXCHANGES` — comma-separated exchange filter
-- `INSTANCE_ID` / `TOTAL_INSTANCES` — for multi-instance sharding (round-robin distribution)
-- `DEBUG_EXCHANGES` / `DEBUG_EXCHANGES_LIVE` — per-exchange log level control
-- DB connection via shared `DBSettings`
-
-`runtime.py` builds `RuntimeConfig` by merging CLI args and env vars. CLI takes precedence.
+`settings.py` defines the tracker config surface. The source of truth for variable names is `fundingpulse/tracker/settings.py` plus `.env.example`; shared DB credentials stay in `DB_*`, tracker knobs in `FT_*`, and docker fan-out in `FT_INSTANCE_COUNT`.
