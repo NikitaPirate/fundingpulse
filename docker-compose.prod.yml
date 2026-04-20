@@ -1,11 +1,16 @@
-# Production override: route api through an external reverse proxy (e.g. Nginx
-# Proxy Manager) instead of publishing ports on the host.
+# Production override: route public services through an external reverse proxy
+# (e.g. Nginx Proxy Manager) instead of publishing ports on the host.
 #
 # Activate via COMPOSE_FILE in .env:
 #   COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
 
 services:
   api:
+    ports: !reset null
+    networks:
+      - proxy
+
+  frontend:
     ports: !reset null
     networks:
       - proxy

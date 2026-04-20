@@ -85,6 +85,32 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
 
+  frontend:
+    build:
+      context: .
+      dockerfile: deploy/frontend.Dockerfile
+    container_name: fundingpulse-frontend
+    restart: unless-stopped
+    networks:
+      - funding
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/healthz', { signal: AbortSignal.timeout(2000) }).then((r) => { if (!r.ok) process.exit(1); }).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+
 networks:
   funding:
 

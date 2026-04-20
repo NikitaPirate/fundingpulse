@@ -1,5 +1,5 @@
-# Backend image allowlist. Keep local, private, and frontend build state out of
-# the Docker build context.
+# Docker image allowlist. Keep local, private, and build state out of the Docker
+# build context while allowing backend and frontend images to share this root.
 *
 
 !pyproject.toml
@@ -13,3 +13,15 @@
 !deploy/
 !deploy/backend.Dockerfile
 !deploy/supervisord.conf
+!deploy/frontend.Dockerfile
+
+!frontend/
+!frontend/**
+
+frontend/.env*
+frontend/.next/
+frontend/.playwright-cli/
+frontend/.vercel/
+frontend/node_modules/
+frontend/out/
+frontend/*.png

@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE_URL = "http://localhost:8000";
+const DEFAULT_API_BASE_URL = "";
 
 export const apiMocksEnabled =
   process.env.NODE_ENV !== "production" &&
@@ -7,10 +7,9 @@ export const apiMocksEnabled =
 let apiMockStartup: Promise<void> | null = null;
 
 export function getApiBaseUrl() {
-  return (
-    process.env.NEXT_PUBLIC_FUNDING_API_BASE_URL?.replace(/\/$/, "") ??
-    DEFAULT_API_BASE_URL
-  );
+  const configuredBaseUrl = process.env.NEXT_PUBLIC_FUNDING_API_BASE_URL?.trim();
+
+  return configuredBaseUrl ? configuredBaseUrl.replace(/\/$/, "") : DEFAULT_API_BASE_URL;
 }
 
 export function buildApiUrl(path: string) {
