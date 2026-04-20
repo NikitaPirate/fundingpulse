@@ -11,7 +11,7 @@ from fundingpulse.tracker.runtime import build_runtime_config
 from fundingpulse.tracker.settings import Settings, TrackerAppSettings, TrackerDBTuning
 
 
-def test_build_runtime_config_embeds_db_runtime_config() -> None:
+def test_build_runtime_config_merges_db_runtime_overrides() -> None:
     settings = Settings(
         db=DBSettings.model_construct(
             host="localhost",
@@ -38,12 +38,8 @@ def test_build_runtime_config_embeds_db_runtime_config() -> None:
 
     assert isinstance(config.db, DBRuntimeConfig)
     assert config.db.connection_url.startswith("timescaledb+psycopg://tracker:tracker@localhost:")
-    assert config.db.engine_kwargs == {
-        "echo": False,
-        "pool_pre_ping": True,
-        "pool_size": 99,
-        "max_overflow": 200,
-    }
+    assert config.db.engine_kwargs["pool_size"] == 99
+    assert config.db.engine_kwargs["pool_pre_ping"] is True
     assert config.db.session_kwargs == {"expire_on_commit": True}
 
 

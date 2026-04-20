@@ -1,0 +1,15 @@
+# Backend image allowlist. Keep local, private, and frontend build state out of
+# the Docker build context.
+*
+
+!pyproject.toml
+!uv.lock
+!README.md
+!alembic.ini
+
+!fundingpulse/
+!fundingpulse/**
+
+!deploy/
+!deploy/backend.Dockerfile
+!deploy/supervisord.conf

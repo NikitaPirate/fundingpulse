@@ -104,8 +104,8 @@ def _resolve_engine_kwargs(service_engine_kwargs: dict[str, Any] | None) -> dict
     defaults = {
         "echo": False,
         "pool_pre_ping": True,
-        "pool_size": 30,
-        "max_overflow": 200,
+        "pool_size": 10,
+        "max_overflow": 20,
     }
     return {**defaults, **(service_engine_kwargs or {})}
 

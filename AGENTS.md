@@ -78,4 +78,4 @@ Rule: if a value is shared across services → no service prefix. If it's owned 
 
 ## Deploy
 
-Docker Compose in `deploy/`. Three services: timescaledb, tracker, api. Migration runs as init container (`db-migrate`). Tracker supports multi-instance sharding via `FT_INSTANCE_ID` / `FT_TOTAL_INSTANCES`, while deploy fan-out uses `FT_INSTANCE_COUNT`.
+Docker Compose in the repo root; Dockerfiles and supervisord config live in `deploy/`. Three services: timescaledb, tracker, api. Migration runs as init container (`db-migrate`). Tracker supports multi-instance sharding via `FT_INSTANCE_ID` / `FT_TOTAL_INSTANCES`, while deploy fan-out uses `FT_INSTANCE_COUNT`.
