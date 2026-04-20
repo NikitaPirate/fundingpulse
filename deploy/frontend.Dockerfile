@@ -3,7 +3,7 @@ FROM node:24-bookworm-slim AS deps
 
 WORKDIR /app/frontend
 
-COPY frontend/package.json frontend/package-lock.json ./
+COPY frontend/package.json frontend/package-lock.json frontend/.npmrc ./
 
 RUN npm ci
 
