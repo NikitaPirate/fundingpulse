@@ -1,14 +1,15 @@
 """Contract query functions."""
 
 from collections.abc import Sequence
-from typing import Any, cast
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 from sqlalchemy.sql.expression import select
 from sqlmodel import col
 
 from fundingpulse.models.contract import Contract
+from fundingpulse.models.contract_history_state import ContractHistoryState
+from fundingpulse.tracker.contracts import TrackedContract
+from fundingpulse.tracker.history import ContractHistoryStateSnapshot
 
 
 async def get_by_section(session: AsyncSession, section_name: str) -> Sequence[Contract]:
@@ -27,17 +28,38 @@ async def get_active_by_section(session: AsyncSession, section_name: str) -> Seq
     return result.scalars().all()
 
 
-async def get_active_by_section_with_history_state(
+async def get_contract_history_state_snapshots_by_section(
     session: AsyncSession, section_name: str
-) -> Sequence[Contract]:
-    """Returns non-deprecated contracts with tracker history state loaded."""
+) -> Sequence[tuple[TrackedContract, ContractHistoryStateSnapshot]]:
+    """Return active contracts with existing tracker history-state snapshots.
+
+    Contracts without a ContractHistoryState row are intentionally skipped:
+    registry creates missing state rows, so the next tracker pass will pick
+    them up after that repair.
+    """
     stmt = (
-        select(Contract)
-        .options(selectinload(cast(Any, Contract.history_state)))
+        select(Contract, ContractHistoryState)
+        .join(ContractHistoryState, col(Contract.id) == col(ContractHistoryState.contract_id))
         .where(
             col(Contract.section_name) == section_name,
             col(Contract.deprecated).is_(False),
         )
     )
     result = await session.execute(stmt)
-    return result.scalars().all()
+    return [
+        (
+            TrackedContract(
+                id=contract.id,
+                asset_name=contract.asset_name,
+                section_name=contract.section_name,
+                quote_name=contract.quote_name,
+                funding_interval=contract.funding_interval,
+            ),
+            ContractHistoryStateSnapshot(
+                history_synced=state.history_synced,
+                oldest_timestamp=state.oldest_timestamp,
+                newest_timestamp=state.newest_timestamp,
+            ),
+        )
+        for contract, state in result.all()
+    ]

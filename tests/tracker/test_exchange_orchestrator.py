@@ -15,9 +15,12 @@ from fundingpulse.time import UtcDateTime, utc_now
 from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
+from fundingpulse.tracker.history import ContractHistoryStateSnapshot
 from fundingpulse.tracker.orchestration.history_sync import process_contracts
 from fundingpulse.tracker.orchestration.section_logger import make_section_logger
-from fundingpulse.tracker.queries.contracts import get_active_by_section_with_history_state
+from fundingpulse.tracker.queries.contracts import (
+    get_contract_history_state_snapshots_by_section,
+)
 
 
 class _FakeExchange(BaseExchange):
@@ -68,9 +71,11 @@ def _session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
     return async_sessionmaker(engine, expire_on_commit=False)
 
 
-async def _load_contracts(session: AsyncSession, section_name: str) -> list[Contract]:
-    contracts = await get_active_by_section_with_history_state(session, section_name)
-    return list(contracts)
+async def _load_contract_states(
+    session: AsyncSession, section_name: str
+) -> list[tuple[TrackedContract, ContractHistoryStateSnapshot]]:
+    contract_states = await get_contract_history_state_snapshots_by_section(session, section_name)
+    return list(contract_states)
 
 
 async def _set_state(
@@ -93,11 +98,11 @@ async def _set_state(
 async def _run(
     engine: AsyncEngine,
     exchange: _FakeExchange,
-    contracts: list[Contract],
+    contract_states: list[tuple[TrackedContract, ContractHistoryStateSnapshot]],
 ) -> list[tuple[int, int]]:
     return await process_contracts(
         adapter=exchange,
-        contracts=contracts,
+        contract_states=contract_states,
         db=_session_factory(engine),
         logger=make_section_logger(__name__, exchange.EXCHANGE_ID),
     )
@@ -125,7 +130,7 @@ async def test_fresh_synced_contract_is_skipped_before_api_call(
 
     exchange = _FakeExchange(after_responses=[[FundingPoint(rate=0.01, timestamp=utc_now())]])
     results = await _run(
-        engine, exchange, await _load_contracts(db_session, _FakeExchange.EXCHANGE_ID)
+        engine, exchange, await _load_contract_states(db_session, _FakeExchange.EXCHANGE_ID)
     )
 
     assert results == [(0, 0)]
@@ -133,7 +138,7 @@ async def test_fresh_synced_contract_is_skipped_before_api_call(
 
 
 @pytest.mark.asyncio
-async def test_due_synced_contract_updates_from_state_cursor(
+async def test_due_synced_contract_updates_from_history_state(
     db_session: AsyncSession,
     engine: AsyncEngine,
 ) -> None:
@@ -155,7 +160,7 @@ async def test_due_synced_contract_updates_from_state_cursor(
     )
     exchange = _FakeExchange(after_responses=[[point]])
     results = await _run(
-        engine, exchange, await _load_contracts(db_session, _FakeExchange.EXCHANGE_ID)
+        engine, exchange, await _load_contract_states(db_session, _FakeExchange.EXCHANGE_ID)
     )
     await db_session.refresh(state)
     record = (
@@ -173,7 +178,7 @@ async def test_due_synced_contract_updates_from_state_cursor(
 
 
 @pytest.mark.asyncio
-async def test_unsynced_contract_syncs_from_state_cursor(
+async def test_unsynced_contract_syncs_from_history_state(
     db_session: AsyncSession,
     engine: AsyncEngine,
 ) -> None:
@@ -202,7 +207,7 @@ async def test_unsynced_contract_syncs_from_state_cursor(
     )
     exchange = _FakeExchange(before_responses=[[older_point], []])
     results = await _run(
-        engine, exchange, await _load_contracts(db_session, _FakeExchange.EXCHANGE_ID)
+        engine, exchange, await _load_contract_states(db_session, _FakeExchange.EXCHANGE_ID)
     )
     await db_session.refresh(state)
 
@@ -231,7 +236,7 @@ async def test_empty_sync_response_without_points_keeps_history_unsynced(
     state = await _set_state(db_session, contract, history_synced=False)
     exchange = _FakeExchange(before_responses=[[]])
     results = await _run(
-        engine, exchange, await _load_contracts(db_session, _FakeExchange.EXCHANGE_ID)
+        engine, exchange, await _load_contract_states(db_session, _FakeExchange.EXCHANGE_ID)
     )
     await db_session.refresh(state)
 
@@ -244,7 +249,7 @@ async def test_empty_sync_response_without_points_keeps_history_unsynced(
     first_point = FundingPoint(rate=0.003, timestamp=utc_now() - timedelta(hours=1))
     exchange = _FakeExchange(before_responses=[[first_point], []])
     results = await _run(
-        engine, exchange, await _load_contracts(db_session, _FakeExchange.EXCHANGE_ID)
+        engine, exchange, await _load_contract_states(db_session, _FakeExchange.EXCHANGE_ID)
     )
     await db_session.refresh(state)
 
@@ -277,7 +282,7 @@ async def test_empty_sync_response_with_existing_bounds_marks_history_synced(
     )
     exchange = _FakeExchange(before_responses=[[]])
     results = await _run(
-        engine, exchange, await _load_contracts(db_session, _FakeExchange.EXCHANGE_ID)
+        engine, exchange, await _load_contract_states(db_session, _FakeExchange.EXCHANGE_ID)
     )
     await db_session.refresh(state)
 

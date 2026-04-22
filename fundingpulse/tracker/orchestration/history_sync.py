@@ -32,19 +32,18 @@ from dataclasses import dataclass
 from datetime import timedelta
 from uuid import UUID
 
-from sqlalchemy.exc import InvalidRequestError
-
 from fundingpulse.db import SessionFactory
-from fundingpulse.models.contract import Contract
-from fundingpulse.models.contract_history_state import ContractHistoryState
 from fundingpulse.models.historical_funding_point import HistoricalFundingPoint
 from fundingpulse.time import UtcDateTime, utc_now
 from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import FundingPoint
+from fundingpulse.tracker.history import ContractHistoryStateSnapshot
 from fundingpulse.tracker.orchestration.section_logger import SectionLogger
 from fundingpulse.tracker.queries import contract_history_state
-from fundingpulse.tracker.queries.contracts import get_active_by_section_with_history_state
+from fundingpulse.tracker.queries.contracts import (
+    get_contract_history_state_snapshots_by_section,
+)
 from fundingpulse.tracker.queries.utils import bulk_insert
 
 SYNC_TIMEOUT_SECONDS = 600.0
@@ -68,21 +67,23 @@ async def run_history_updates(
 ) -> HistoryUpdateStats:
     """Load active contracts and process each one concurrently."""
     async with db.begin() as session:
-        contracts = list(await get_active_by_section_with_history_state(session, section_name))
+        contract_states = list(
+            await get_contract_history_state_snapshots_by_section(session, section_name)
+        )
 
-    if not contracts:
+    if not contract_states:
         logger.warning("No contracts to process")
         return HistoryUpdateStats(0, 0, 0)
 
-    logger.debug("Processing %d contracts", len(contracts))
+    logger.debug("Processing %d contracts", len(contract_states))
     results = await process_contracts(
         adapter=adapter,
-        contracts=contracts,
+        contract_states=contract_states,
         db=db,
         logger=logger,
     )
     return HistoryUpdateStats(
-        contracts_total=len(contracts),
+        contracts_total=len(contract_states),
         contracts_updated=sum(r[0] for r in results),
         points_fetched=sum(r[1] for r in results),
     )
@@ -91,30 +92,28 @@ async def run_history_updates(
 async def process_contracts(
     *,
     adapter: BaseExchange,
-    contracts: Sequence[Contract],
+    contract_states: Sequence[tuple[TrackedContract, ContractHistoryStateSnapshot]],
     db: SessionFactory,
     logger: SectionLogger,
 ) -> list[tuple[int, int]]:
     """Process all contracts in parallel, returning per-contract (updated, points).
 
-    Exposed separately so tests can drive the sync/update loop with a
-    preloaded contract list.
+    Exposed separately so tests can drive the sync/update loop with preloaded
+    contract-state pairs.
     """
-    results: list[tuple[int, int]] = [(0, 0)] * len(contracts)
+    results: list[tuple[int, int]] = [(0, 0)] * len(contract_states)
     tasks: list[tuple[int, asyncio.Task[tuple[int, int]]]] = []
     skipped = 0
     now = utc_now()
 
-    for index, contract in enumerate(contracts):
-        tracked_contract = _to_tracked_contract(contract)
-        state = _require_history_state(contract)
-        if _is_fresh_synced(tracked_contract, state, now):
+    for index, (contract, state) in enumerate(contract_states):
+        if _is_fresh_synced(contract, state, now):
             skipped += 1
             continue
         tasks.append(
             (
                 index,
-                asyncio.create_task(_process_one(adapter, tracked_contract, state, db, logger)),
+                asyncio.create_task(_process_one(adapter, contract, state, db, logger)),
             )
         )
 
@@ -133,7 +132,7 @@ async def process_contracts(
 async def _process_one(
     adapter: BaseExchange,
     contract: TrackedContract,
-    state: ContractHistoryState,
+    state: ContractHistoryStateSnapshot,
     db: SessionFactory,
     logger: SectionLogger,
 ) -> tuple[int, int]:
@@ -160,7 +159,7 @@ async def _process_one(
 async def _sync(
     adapter: BaseExchange,
     contract: TrackedContract,
-    state: ContractHistoryState,
+    state: ContractHistoryStateSnapshot,
     db: SessionFactory,
     logger: SectionLogger,
 ) -> int:
@@ -250,11 +249,11 @@ async def _finalize_sync_if_ready(
 async def _update(
     adapter: BaseExchange,
     contract: TrackedContract,
-    state: ContractHistoryState,
+    state: ContractHistoryStateSnapshot,
     db: SessionFactory,
     logger: SectionLogger,
 ) -> int:
-    """Fetch points newer than the stored cursor, guarded by funding_interval."""
+    """Fetch points newer than the stored history-state timestamp."""
     label = f"{contract.asset_name}/{contract.quote_name}"
     newest_ts = _require_synced_newest_timestamp(contract, state)
     after_ts = newest_ts + timedelta(seconds=1)
@@ -289,8 +288,7 @@ async def persist_batch(
     is always safe to pass both the batch's oldest and newest — existing
     bounds never shrink to a "worse" value.
 
-    Returns (batch_oldest, batch_newest) so the caller can advance its
-    pagination cursor.
+    Returns (batch_oldest, batch_newest) so the caller can advance pagination.
     """
     batch_oldest = min(p.timestamp for p in points)
     batch_newest = max(p.timestamp for p in points)
@@ -315,25 +313,9 @@ async def persist_batch(
     return batch_oldest, batch_newest
 
 
-def _require_history_state(contract: Contract) -> ContractHistoryState:
-    """Fail loudly if the caller forgot to eager-load `history_state`.
-
-    `Contract.history_state` uses `lazy="raise"` in the model, so callers must
-    use `get_active_by_section_with_history_state` (or an equivalent selectin)
-    to load the relationship up front.
-    """
-    try:
-        state = contract.history_state
-    except InvalidRequestError as e:
-        raise RuntimeError(f"History state not loaded for contract {contract.id}") from e
-    if state is None:
-        raise RuntimeError(f"Missing history state for contract {contract.id}")
-    return state
-
-
 def _is_fresh_synced(
     contract: TrackedContract,
-    state: ContractHistoryState,
+    state: ContractHistoryStateSnapshot,
     now: UtcDateTime,
 ) -> bool:
     """True when a synced contract hasn't had time to produce a new point yet."""
@@ -345,19 +327,8 @@ def _is_fresh_synced(
 
 def _require_synced_newest_timestamp(
     contract: TrackedContract,
-    state: ContractHistoryState,
+    state: ContractHistoryStateSnapshot,
 ) -> UtcDateTime:
     if state.newest_timestamp is None:
         raise RuntimeError(f"History-synced contract {contract.id} has no newest timestamp")
     return state.newest_timestamp
-
-
-def _to_tracked_contract(contract: Contract) -> TrackedContract:
-    """Temporary ORM bridge until history queries return tracker read models."""
-    return TrackedContract(
-        id=contract.id,
-        asset_name=contract.asset_name,
-        section_name=contract.section_name,
-        quote_name=contract.quote_name,
-        funding_interval=contract.funding_interval,
-    )
