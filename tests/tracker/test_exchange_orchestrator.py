@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import cast
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlmodel import col
 
 from fundingpulse.models.contract import Contract
 from fundingpulse.models.contract_history_state import ContractHistoryState
@@ -14,14 +14,9 @@ from fundingpulse.testing.helpers.data_helpers import create_contract
 from fundingpulse.time import UtcDateTime, utc_now
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
-from fundingpulse.tracker.materialized_view_refresher import MaterializedViewRefresher
-from fundingpulse.tracker.orchestration.exchange_orchestrator import ExchangeOrchestrator
+from fundingpulse.tracker.orchestration.history_sync import process_contracts
+from fundingpulse.tracker.orchestration.section_logger import make_section_logger
 from fundingpulse.tracker.queries.contracts import get_active_by_section_with_history_state
-
-
-class _NoopRefresher:
-    def signal_contracts_changed(self, section_name: str) -> None:
-        pass
 
 
 class _FakeExchange(BaseExchange):
@@ -94,12 +89,16 @@ async def _set_state(
     return state
 
 
-def _orchestrator(engine: AsyncEngine, exchange: _FakeExchange) -> ExchangeOrchestrator:
-    return ExchangeOrchestrator(
-        exchange_adapter=exchange,
-        section_name=exchange.EXCHANGE_ID,
+async def _run(
+    engine: AsyncEngine,
+    exchange: _FakeExchange,
+    contracts: list[Contract],
+) -> list[tuple[int, int]]:
+    return await process_contracts(
+        adapter=exchange,
+        contracts=contracts,
         db=_session_factory(engine),
-        mv_refresher=cast(MaterializedViewRefresher, _NoopRefresher()),
+        logger=make_section_logger(__name__, exchange.EXCHANGE_ID),
     )
 
 
@@ -124,10 +123,8 @@ async def test_fresh_synced_contract_is_skipped_before_api_call(
     )
 
     exchange = _FakeExchange(after_responses=[[FundingPoint(rate=0.01, timestamp=utc_now())]])
-    orchestrator = _orchestrator(engine, exchange)
-
-    results = await orchestrator._process_all_contracts(
-        await _load_contracts(db_session, _FakeExchange.EXCHANGE_ID)
+    results = await _run(
+        engine, exchange, await _load_contracts(db_session, _FakeExchange.EXCHANGE_ID)
     )
 
     assert results == [(0, 0)]
@@ -156,15 +153,15 @@ async def test_due_synced_contract_updates_from_state_cursor(
         newest_timestamp=newest,
     )
     exchange = _FakeExchange(after_responses=[[point]])
-    orchestrator = _orchestrator(engine, exchange)
-
-    results = await orchestrator._process_all_contracts(
-        await _load_contracts(db_session, _FakeExchange.EXCHANGE_ID)
+    results = await _run(
+        engine, exchange, await _load_contracts(db_session, _FakeExchange.EXCHANGE_ID)
     )
     await db_session.refresh(state)
     record = (
         await db_session.execute(
-            select(HistoricalFundingPoint).where(HistoricalFundingPoint.contract_id == contract.id)
+            select(HistoricalFundingPoint).where(
+                col(HistoricalFundingPoint.contract_id) == contract.id
+            )
         )
     ).scalar_one()
 
@@ -203,10 +200,8 @@ async def test_unsynced_contract_syncs_from_state_cursor(
         newest_timestamp=current_oldest,
     )
     exchange = _FakeExchange(before_responses=[[older_point], []])
-    orchestrator = _orchestrator(engine, exchange)
-
-    results = await orchestrator._process_all_contracts(
-        await _load_contracts(db_session, _FakeExchange.EXCHANGE_ID)
+    results = await _run(
+        engine, exchange, await _load_contracts(db_session, _FakeExchange.EXCHANGE_ID)
     )
     await db_session.refresh(state)
 
@@ -234,10 +229,8 @@ async def test_empty_sync_response_without_points_keeps_history_unsynced(
     )
     state = await _set_state(db_session, contract, history_synced=False)
     exchange = _FakeExchange(before_responses=[[]])
-    orchestrator = _orchestrator(engine, exchange)
-
-    results = await orchestrator._process_all_contracts(
-        await _load_contracts(db_session, _FakeExchange.EXCHANGE_ID)
+    results = await _run(
+        engine, exchange, await _load_contracts(db_session, _FakeExchange.EXCHANGE_ID)
     )
     await db_session.refresh(state)
 
@@ -249,10 +242,8 @@ async def test_empty_sync_response_without_points_keeps_history_unsynced(
 
     first_point = FundingPoint(rate=0.003, timestamp=utc_now() - timedelta(hours=1))
     exchange = _FakeExchange(before_responses=[[first_point], []])
-    orchestrator = _orchestrator(engine, exchange)
-
-    results = await orchestrator._process_all_contracts(
-        await _load_contracts(db_session, _FakeExchange.EXCHANGE_ID)
+    results = await _run(
+        engine, exchange, await _load_contracts(db_session, _FakeExchange.EXCHANGE_ID)
     )
     await db_session.refresh(state)
 
@@ -284,10 +275,8 @@ async def test_empty_sync_response_with_existing_bounds_marks_history_synced(
         newest_timestamp=timestamp,
     )
     exchange = _FakeExchange(before_responses=[[]])
-    orchestrator = _orchestrator(engine, exchange)
-
-    results = await orchestrator._process_all_contracts(
-        await _load_contracts(db_session, _FakeExchange.EXCHANGE_ID)
+    results = await _run(
+        engine, exchange, await _load_contracts(db_session, _FakeExchange.EXCHANGE_ID)
     )
     await db_session.refresh(state)
 

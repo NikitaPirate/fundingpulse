@@ -7,22 +7,24 @@ Scheduler-based service that collects funding rates from crypto exchanges into T
 ```
 main.py → DB runtime scope → bootstrap.py → ExchangeOrchestrator (per exchange)
                               ├── update()      — hourly + on startup
-                              │   ├── _register_contracts() — sync contract list from exchange API
-                              │   ├── _sync_contract()      — backfill full history (history_synced=false)
-                              │   └── _update_contract()    — fetch new points since last known
+                              │   ├── contract_registry.register_contracts  — sync contract list
+                              │   └── history_sync.run_history_updates      — sync/update history
                               └── update_live() — every minute, snapshot current unsettled rates
+                                  └── live_collector.collect_live
 ```
 
 ## Key components
 
 **main.py** — owns the top-level DB runtime scope and shared HTTP client, then hands a ready `SessionFactory` to bootstrap.
 
-**bootstrap.py** — wires everything: resolves exchanges, creates APScheduler, registers jobs around the provided `SessionFactory`. Each exchange gets two cron jobs: `{exchange}_update` (hourly) and `{exchange}_live` (every minute, staggered).
+**bootstrap.py** — wires everything: resolves exchanges, seeds the `section` rows once, creates APScheduler, registers jobs around the provided `SessionFactory`. Each exchange gets two cron jobs: `{exchange}_update` (hourly) and `{exchange}_live` (every minute, staggered).
 
-**ExchangeOrchestrator** — per-exchange coordinator. `update()` runs contract registration then processes all contracts concurrently (with semaphore). `update_live()` collects current rates. Both are scheduler job targets. All data operations are methods on the orchestrator:
-- `_register_contracts()` — calls exchange `get_contracts()`, upserts to DB, marks missing as deprecated, signals MV refresher.
-- `_sync_contract()` — backward pagination: fetches history in batches until exchange returns empty. Marks `ContractHistoryState.history_synced=True` when done.
-- `_update_contract()` — forward fetch: gets new points after the newest known timestamp. Skips if funding_interval hasn't elapsed.
+**orchestration/** — four siblings that split the per-exchange workflow:
+- `exchange_orchestrator.py` — thin facade with `update()` / `update_live()` scheduler entry points. Bundles dependencies (adapter, DB, MV refresher, logger), delegates to the modules below, and logs cycle duration.
+- `contract_registry.py` — `register_contracts()`: fetches exchange contracts, ensures assets/quotes, computes an explicit reconciliation plan (`added`, `deprecated`, `reactivated`, `interval_changes`), applies it, creates history-state rows, and signals the MV refresher only when contracts changed.
+- `history_sync.py` — `run_history_updates()` / `process_contracts()`: loads active contracts with history state eager-loaded, runs a per-contract task that either backfills (`_sync`, backward pagination until empty) or incrementally extends (`_update`, forward fetch gated by `funding_interval`). Both paths persist via `persist_batch()`, which relies on `update_bounds`' SQL-level `LEAST`/`GREATEST` merge. Sync timeout is 10 min, update is 1 min.
+- `live_collector.py` — `collect_live()`: fetches live rates, inserts a snapshot, logs success/failure. Errors are logged and swallowed (minute cadence must not stall).
+- `section_logger.py` — `LoggerAdapter` that prepends `[section]` to every record; centralises the prefix that was duplicated across the layer.
 
 **MaterializedViewRefresher** — debounced (10s default) refresh of `contract_enriched` materialized view. Triggered when contracts change, checked every second by scheduler.
 

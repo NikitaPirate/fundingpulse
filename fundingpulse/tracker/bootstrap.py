@@ -11,10 +11,12 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.date import DateTrigger
 
 from fundingpulse.db import SessionFactory
+from fundingpulse.models.section import Section
 from fundingpulse.time import UTC, utc_now
 from fundingpulse.tracker.exchanges import EXCHANGES
 from fundingpulse.tracker.materialized_view_refresher import MaterializedViewRefresher
 from fundingpulse.tracker.orchestration import ExchangeOrchestrator
+from fundingpulse.tracker.queries.utils import bulk_insert
 from fundingpulse.tracker.services.asset_ranking import update_rankings
 
 logger = logging.getLogger(__name__)
@@ -28,6 +30,7 @@ async def bootstrap(
 ) -> AsyncIOScheduler:
     """Build and return configured scheduler."""
     resolved_exchanges = _resolve_exchanges(exchanges)
+    await _ensure_sections(session_factory, resolved_exchanges)
     mv_refresher = MaterializedViewRefresher(
         db=session_factory,
         debounce_seconds=mv_refresher_debounce,
@@ -53,6 +56,20 @@ async def bootstrap(
         len(scheduler.get_jobs()),
     )
     return scheduler
+
+
+async def _ensure_sections(session_factory: SessionFactory, exchange_names: list[str]) -> None:
+    """Seed the `section` table for every exchange this instance handles.
+
+    Sections are static — one row per exchange — and only need to exist before
+    contracts reference them. Doing this once at bootstrap keeps the hourly
+    registration cycle free of the upsert.
+    """
+    if not exchange_names:
+        return
+    rows = [Section(name=name) for name in exchange_names]
+    async with session_factory.begin() as session:
+        await bulk_insert(session, Section, rows, on_conflict="ignore")
 
 
 def _resolve_exchanges(exchanges: list[str] | None) -> list[str]:
