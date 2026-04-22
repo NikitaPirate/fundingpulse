@@ -30,6 +30,27 @@ async def get_active_by_section(session: AsyncSession, section_name: str) -> Seq
     return result.scalars().all()
 
 
+async def get_active_tracked_by_section(
+    session: AsyncSession, section_name: str
+) -> Sequence[TrackedContract]:
+    """Return active contracts in the runtime form used by exchange adapters."""
+    stmt = select(Contract).where(
+        col(Contract.section_name) == section_name,
+        col(Contract.deprecated).is_(False),
+    )
+    result = await session.execute(stmt)
+    return [
+        TrackedContract(
+            id=contract.id,
+            asset_name=contract.asset_name,
+            section_name=contract.section_name,
+            quote_name=contract.quote_name,
+            funding_interval=contract.funding_interval,
+        )
+        for contract in result.scalars().all()
+    ]
+
+
 async def get_registered_by_section(
     session: AsyncSession, section_name: str
 ) -> Sequence[RegisteredContract]:

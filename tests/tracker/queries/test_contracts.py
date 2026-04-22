@@ -14,6 +14,7 @@ from fundingpulse.testing.helpers.data_helpers import (
 )
 from fundingpulse.time import utc_now
 from fundingpulse.tracker.queries.contracts import (
+    get_active_tracked_by_section,
     get_contract_history_state_snapshots_by_section,
 )
 
@@ -79,3 +80,43 @@ async def test_get_contract_history_state_snapshots_returns_active_section_rows_
     assert state.history_synced is True
     assert state.oldest_timestamp == oldest
     assert state.newest_timestamp == newest
+
+
+@pytest.mark.asyncio
+async def test_get_active_tracked_by_section_returns_runtime_contracts(
+    db_session: AsyncSession,
+) -> None:
+    section_name = "live_query_ex"
+    included = await create_contract(
+        db_session,
+        asset_name="BTC",
+        section_name=section_name,
+        quote_name="USDT",
+        funding_interval=8,
+    )
+    deprecated = await create_contract(
+        db_session,
+        asset_name="ETH",
+        section_name=section_name,
+        quote_name="USDT",
+        funding_interval=4,
+    )
+    deprecated.deprecated = True
+    await create_contract(
+        db_session,
+        asset_name="SOL",
+        section_name="other_live_query_ex",
+        quote_name="USDT",
+        funding_interval=8,
+    )
+    await db_session.commit()
+
+    contracts = list(await get_active_tracked_by_section(db_session, section_name))
+
+    assert len(contracts) == 1
+    contract = contracts[0]
+    assert contract.id == included.id
+    assert contract.asset_name == "BTC"
+    assert contract.section_name == section_name
+    assert contract.quote_name == "USDT"
+    assert contract.funding_interval == 8
