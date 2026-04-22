@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from uuid import uuid4
 
 import pytest
 from sqlalchemy import func, select
@@ -12,7 +13,7 @@ from fundingpulse.models.contract import Contract
 from fundingpulse.models.contract_history_state import ContractHistoryState
 from fundingpulse.models.quote import Quote
 from fundingpulse.testing.helpers.data_helpers import create_contract, get_or_create_section
-from fundingpulse.tracker.contracts import TrackedContract
+from fundingpulse.tracker.contracts import RegisteredContract, TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 from fundingpulse.tracker.orchestration.contract_registry import (
@@ -74,8 +75,9 @@ def _contract(
     funding_interval: int = 8,
     quote_name: str = "USDT",
     deprecated: bool = False,
-) -> Contract:
-    return Contract(
+) -> RegisteredContract:
+    return RegisteredContract(
+        id=uuid4(),
         asset_name=asset_name,
         section_name=_SECTION,
         quote_name=quote_name,

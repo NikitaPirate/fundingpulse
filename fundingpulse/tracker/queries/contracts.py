@@ -1,14 +1,16 @@
 """Contract query functions."""
 
 from collections.abc import Sequence
+from uuid import UUID
 
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.expression import select
 from sqlmodel import col
 
 from fundingpulse.models.contract import Contract
 from fundingpulse.models.contract_history_state import ContractHistoryState
-from fundingpulse.tracker.contracts import TrackedContract
+from fundingpulse.tracker.contracts import RegisteredContract, TrackedContract
 from fundingpulse.tracker.history import ContractHistoryStateSnapshot
 
 
@@ -26,6 +28,25 @@ async def get_active_by_section(session: AsyncSession, section_name: str) -> Seq
     )
     result = await session.execute(stmt)
     return result.scalars().all()
+
+
+async def get_registered_by_section(
+    session: AsyncSession, section_name: str
+) -> Sequence[RegisteredContract]:
+    """Return contract rows needed to reconcile the registry feed."""
+    stmt = select(Contract).where(col(Contract.section_name) == section_name)
+    result = await session.execute(stmt)
+    return [
+        RegisteredContract(
+            id=contract.id,
+            asset_name=contract.asset_name,
+            section_name=contract.section_name,
+            quote_name=contract.quote_name,
+            funding_interval=contract.funding_interval,
+            deprecated=contract.deprecated,
+        )
+        for contract in result.scalars().all()
+    ]
 
 
 async def get_contract_history_state_snapshots_by_section(
@@ -63,3 +84,37 @@ async def get_contract_history_state_snapshots_by_section(
         )
         for contract, state in result.all()
     ]
+
+
+async def mark_deprecated(session: AsyncSession, contract_ids: Sequence[UUID]) -> None:
+    await _set_deprecated(session, contract_ids, deprecated=True)
+
+
+async def reactivate(session: AsyncSession, contract_ids: Sequence[UUID]) -> None:
+    await _set_deprecated(session, contract_ids, deprecated=False)
+
+
+async def set_funding_interval(
+    session: AsyncSession,
+    contract_id: UUID,
+    funding_interval: int,
+) -> None:
+    stmt = (
+        update(Contract)
+        .where(col(Contract.id) == contract_id)
+        .values(funding_interval=funding_interval)
+    )
+    await session.execute(stmt)
+
+
+async def _set_deprecated(
+    session: AsyncSession,
+    contract_ids: Sequence[UUID],
+    *,
+    deprecated: bool,
+) -> None:
+    if not contract_ids:
+        return
+
+    stmt = update(Contract).where(col(Contract.id).in_(contract_ids)).values(deprecated=deprecated)
+    await session.execute(stmt)

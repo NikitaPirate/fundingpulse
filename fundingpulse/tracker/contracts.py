@@ -15,3 +15,15 @@ class TrackedContract:
     section_name: str
     quote_name: str
     funding_interval: int
+
+
+@dataclass(frozen=True, slots=True)
+class RegisteredContract:
+    """Persisted contract row as seen by the registry reconciliation."""
+
+    id: UUID
+    asset_name: str
+    section_name: str
+    quote_name: str
+    funding_interval: int
+    deprecated: bool
