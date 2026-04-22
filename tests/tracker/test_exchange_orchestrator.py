@@ -14,7 +14,7 @@ from fundingpulse.testing.helpers.data_helpers import create_contract
 from fundingpulse.time import UtcDateTime, utc_now
 from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
-from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
+from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 from fundingpulse.tracker.orchestration.history_sync import process_contracts
 from fundingpulse.tracker.orchestration.section_logger import make_section_logger
 from fundingpulse.tracker.queries.contracts import get_active_by_section_with_history_state
@@ -39,7 +39,7 @@ class _FakeExchange(BaseExchange):
     def _format_symbol(self, contract: TrackedContract) -> str:
         return contract.asset_name
 
-    async def get_contracts(self) -> list[ContractInfo]:
+    async def get_contracts(self) -> list[ExchangeContractListing]:
         return []
 
     async def _fetch_history(

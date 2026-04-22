@@ -10,7 +10,7 @@ from httpx import HTTPError
 
 from fundingpulse.time import UtcDateTime, to_unix_milliseconds, utc_now
 from fundingpulse.tracker.contracts import TrackedContract
-from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
+from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 from fundingpulse.tracker.infrastructure import http_client
 
 
@@ -83,7 +83,7 @@ class BaseExchange(ABC):
         ...
 
     @abstractmethod
-    async def get_contracts(self) -> list[ContractInfo]:
+    async def get_contracts(self) -> list[ExchangeContractListing]:
         """Fetch all perpetual contracts from exchange."""
         ...
 

@@ -14,7 +14,7 @@ from fundingpulse.models.quote import Quote
 from fundingpulse.testing.helpers.data_helpers import create_contract, get_or_create_section
 from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
-from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
+from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 from fundingpulse.tracker.orchestration.contract_registry import (
     FundingIntervalChange,
     ReconciliationPlan,
@@ -30,15 +30,15 @@ class _RegistryExchange(BaseExchange):
     EXCHANGE_ID = _SECTION
     _FETCH_STEP = 8
 
-    def __init__(self, contracts: Sequence[ContractInfo]) -> None:
+    def __init__(self, listings: Sequence[ExchangeContractListing]) -> None:
         super().__init__()
-        self._contracts = list(contracts)
+        self._listings = list(listings)
 
     def _format_symbol(self, contract: TrackedContract) -> str:
         return contract.asset_name
 
-    async def get_contracts(self) -> list[ContractInfo]:
-        return list(self._contracts)
+    async def get_contracts(self) -> list[ExchangeContractListing]:
+        return list(self._listings)
 
     async def _fetch_history(
         self,
@@ -57,10 +57,12 @@ class _FakeRefresher:
         self.signals.append(exchange_name)
 
 
-def _feed(asset_name: str, funding_interval: int = 8, quote: str = "USDT") -> ContractInfo:
-    return ContractInfo(
+def _feed(
+    asset_name: str, funding_interval: int = 8, quote_name: str = "USDT"
+) -> ExchangeContractListing:
+    return ExchangeContractListing(
         asset_name=asset_name,
-        quote=quote,
+        quote_name=quote_name,
         funding_interval=funding_interval,
         section_name=_SECTION,
     )
@@ -88,7 +90,7 @@ def _session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
 
 async def _run_register(
     engine: AsyncEngine,
-    feed: Sequence[ContractInfo],
+    feed: Sequence[ExchangeContractListing],
 ) -> _FakeRefresher:
     refresher = _FakeRefresher()
     await register_contracts(
@@ -166,10 +168,10 @@ def test_reconcile_quote_is_part_of_identity() -> None:
     """BTC/USDT and BTC/USDC are distinct contracts, not an interval-style edit."""
     btc_usdt = _contract("BTC", quote_name="USDT")
 
-    plan = _reconcile([btc_usdt], [_feed("BTC", quote="USDC")])
+    plan = _reconcile([btc_usdt], [_feed("BTC", quote_name="USDC")])
 
     assert plan.deprecated == (btc_usdt,)
-    assert [info.quote for info in plan.added] == ["USDC"]
+    assert [info.quote_name for info in plan.added] == ["USDC"]
 
 
 def test_reconcile_combined_plan_mixes_all_four_operations() -> None:
@@ -204,7 +206,7 @@ async def test_register_new_contracts_creates_reference_rows_and_history_state(
 ) -> None:
     await get_or_create_section(db_session, _SECTION)
 
-    refresher = await _run_register(engine, [_feed("BTC"), _feed("ETH", quote="USDC")])
+    refresher = await _run_register(engine, [_feed("BTC"), _feed("ETH", quote_name="USDC")])
 
     assets = (
         (await db_session.execute(select(col(Asset.name)).order_by(col(Asset.name))))

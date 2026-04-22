@@ -14,7 +14,7 @@ from rich.table import Table
 from fundingpulse.time import utc_now
 from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges import EXCHANGES
-from fundingpulse.tracker.exchanges.dto import ContractInfo
+from fundingpulse.tracker.exchanges.dto import ExchangeContractListing
 from fundingpulse.tracker.infrastructure import http_client
 
 console = Console()
@@ -98,7 +98,9 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _render_contracts(contracts: list[ContractInfo], preview_limit: int, show_all: bool) -> None:
+def _render_contracts(
+    contracts: list[ExchangeContractListing], preview_limit: int, show_all: bool
+) -> None:
     table = Table(show_header=True, header_style="bold magenta")
     table.add_column("Index", style="cyan", justify="right")
     table.add_column("Asset", style="cyan")
@@ -110,7 +112,7 @@ def _render_contracts(contracts: list[ContractInfo], preview_limit: int, show_al
         table.add_row(
             str(index),
             contract_info.asset_name,
-            contract_info.quote,
+            contract_info.quote_name,
             f"{contract_info.funding_interval}h",
         )
 
@@ -120,17 +122,19 @@ def _render_contracts(contracts: list[ContractInfo], preview_limit: int, show_al
     console.print(table)
 
 
-def _build_contract_for_checks(exchange_id: str, contract_info: ContractInfo) -> TrackedContract:
+def _build_contract_for_checks(
+    exchange_id: str, listing: ExchangeContractListing
+) -> TrackedContract:
     return TrackedContract(
         id=uuid4(),
-        asset_name=contract_info.asset_name,
-        quote_name=contract_info.quote,
+        asset_name=listing.asset_name,
+        quote_name=listing.quote_name,
         section_name=exchange_id,
-        funding_interval=contract_info.funding_interval,
+        funding_interval=listing.funding_interval,
     )
 
 
-def _warn_if_contract_count_looks_truncated(contracts: list[ContractInfo]) -> None:
+def _warn_if_contract_count_looks_truncated(contracts: list[ExchangeContractListing]) -> None:
     count = len(contracts)
     if count in ROUND_CONTRACT_COUNT_WARNINGS:
         console.print(
@@ -140,7 +144,9 @@ def _warn_if_contract_count_looks_truncated(contracts: list[ContractInfo]) -> No
         )
 
 
-def _find_contract_index(contracts: list[ContractInfo], contract_spec: str | None) -> int | None:
+def _find_contract_index(
+    contracts: list[ExchangeContractListing], contract_spec: str | None
+) -> int | None:
     if contract_spec is None:
         return None
 
@@ -154,11 +160,13 @@ def _find_contract_index(contracts: list[ContractInfo], contract_spec: str | Non
     for index, contract in enumerate(contracts):
         if (
             contract.asset_name.upper() == normalized_asset
-            and contract.quote.upper() == normalized_quote
+            and contract.quote_name.upper() == normalized_quote
         ):
             return index
 
-    available = ", ".join(f"{contract.asset_name}/{contract.quote}" for contract in contracts[:10])
+    available = ", ".join(
+        f"{contract.asset_name}/{contract.quote_name}" for contract in contracts[:10]
+    )
     raise ValueError(
         f"Contract {normalized_asset}/{normalized_quote} not found. "
         f"First contracts returned by adapter: {available}"
@@ -231,8 +239,8 @@ async def _verify_exchange_summary(
             round_count_warning=round_count_warning,
         )
 
-    contract_info = contracts[contract_index]
-    contract = _build_contract_for_checks(exchange_id, contract_info)
+    listing = contracts[contract_index]
+    contract = _build_contract_for_checks(exchange_id, listing)
     selected_contract = f"{contract.asset_name}/{contract.quote_name}"
 
     try:
@@ -419,8 +427,8 @@ async def verify_exchange(
         )
         return False
 
-    contract_info = contracts[contract_index]
-    contract = _build_contract_for_checks(exchange_id, contract_info)
+    listing = contracts[contract_index]
+    contract = _build_contract_for_checks(exchange_id, listing)
     console.print(
         "  [green][OK][/green] Selected contract: "
         f"{contract.asset_name}/{contract.quote_name} (index {contract_index})"

@@ -10,7 +10,7 @@ import logging
 from fundingpulse.time import from_unix_milliseconds, utc_now
 from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
-from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
+from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class DeriveExchange(BaseExchange):
     def _format_symbol(self, contract: TrackedContract) -> str:
         return f"{contract.asset_name}-PERP"
 
-    async def get_contracts(self) -> list[ContractInfo]:
+    async def get_contracts(self) -> list[ExchangeContractListing]:
         all_instruments = []
         page = 1
 
@@ -62,9 +62,9 @@ class DeriveExchange(BaseExchange):
                 asset_name = instrument_name.replace("-PERP", "")
 
                 contracts.append(
-                    ContractInfo(
+                    ExchangeContractListing(
                         asset_name=asset_name,
-                        quote="USD",
+                        quote_name="USD",
                         # Derive settles funding continuously, but history API uses period=3600
                         funding_interval=1,
                         section_name=self.EXCHANGE_ID,

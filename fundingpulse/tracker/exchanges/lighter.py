@@ -13,7 +13,7 @@ import websockets
 from fundingpulse.time import from_unix_seconds, utc_now
 from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
-from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
+from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class LighterExchange(BaseExchange):
     def _format_symbol(self, contract: TrackedContract) -> str:
         return str(self._asset_to_id[contract.asset_name])
 
-    async def get_contracts(self) -> list[ContractInfo]:
+    async def get_contracts(self) -> list[ExchangeContractListing]:
         response = await self._api_get(f"{self.API_ENDPOINT}/orderBooks")
 
         assert isinstance(response, dict)
@@ -49,9 +49,9 @@ class LighterExchange(BaseExchange):
             asset_name = market["symbol"]
             asset_to_id[asset_name] = market["market_id"]
             contracts.append(
-                ContractInfo(
+                ExchangeContractListing(
                     asset_name=asset_name,
-                    quote="USD",
+                    quote_name="USD",
                     funding_interval=1,
                     section_name=self.EXCHANGE_ID,
                 )

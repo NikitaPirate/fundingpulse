@@ -22,7 +22,7 @@ from fundingpulse.models.asset import Asset
 from fundingpulse.models.contract import Contract
 from fundingpulse.models.quote import Quote
 from fundingpulse.tracker.exchanges.base import BaseExchange
-from fundingpulse.tracker.exchanges.dto import ContractInfo
+from fundingpulse.tracker.exchanges.dto import ExchangeContractListing
 from fundingpulse.tracker.orchestration.section_logger import SectionLogger
 from fundingpulse.tracker.queries import contract_history_state
 from fundingpulse.tracker.queries import contracts as contract_queries
@@ -39,7 +39,7 @@ class FundingIntervalChange:
 
 @dataclass(frozen=True, slots=True)
 class ReconciliationPlan:
-    added: tuple[ContractInfo, ...] = ()
+    added: tuple[ExchangeContractListing, ...] = ()
     deprecated: tuple[Contract, ...] = ()
     reactivated: tuple[Contract, ...] = ()
     interval_changes: tuple[FundingIntervalChange, ...] = ()
@@ -68,25 +68,25 @@ async def register_contracts(
     """
     logger.debug("Starting contract sync")
 
-    api_contracts = await adapter.get_contracts()
-    logger.debug("Fetched %d contracts from API", len(api_contracts))
+    exchange_listings = await adapter.get_contracts()
+    logger.debug("Fetched %d contract listings from API", len(exchange_listings))
 
-    if not api_contracts:
-        logger.warning("No contracts returned from API")
+    if not exchange_listings:
+        logger.warning("No contract listings returned from API")
         return
 
     async with db.begin() as session:
-        await _ensure_quotes_and_assets(session, api_contracts, logger)
+        await _ensure_quotes_and_assets(session, exchange_listings, logger)
         existing = await contract_queries.get_by_section(session, section_name)
         logger.debug("Found %d existing contracts in DB", len(existing))
-        plan = _reconcile(existing, api_contracts)
+        plan = _reconcile(existing, exchange_listings)
         await _apply_plan(session, section_name, plan)
         await contract_history_state.create_missing_for_section(session, section_name)
 
     logger.info(
         "Contract sync completed: %d feed, %d added, %d deprecated, "
         "%d reactivated, %d interval changes",
-        len(api_contracts),
+        len(exchange_listings),
         len(plan.added),
         len(plan.deprecated),
         len(plan.reactivated),
@@ -102,13 +102,13 @@ async def register_contracts(
 
 def _reconcile(
     existing: Sequence[Contract],
-    feed: Sequence[ContractInfo],
+    feed: Sequence[ExchangeContractListing],
 ) -> ReconciliationPlan:
     """Calculate explicit lifecycle changes between DB contracts and exchange feed."""
     feed_by_key = _feed_by_key(feed)
     existing_by_key = {(c.asset_name, c.quote_name): c for c in existing}
 
-    added = tuple(contract for key, contract in feed_by_key.items() if key not in existing_by_key)
+    added = tuple(listing for key, listing in feed_by_key.items() if key not in existing_by_key)
     deprecated = tuple(
         contract
         for key, contract in existing_by_key.items()
@@ -135,25 +135,27 @@ def _reconcile(
     )
 
 
-def _feed_by_key(feed: Sequence[ContractInfo]) -> dict[ContractKey, ContractInfo]:
-    by_key: dict[ContractKey, ContractInfo] = {}
-    for contract in feed:
-        key = (contract.asset_name, contract.quote)
+def _feed_by_key(
+    feed: Sequence[ExchangeContractListing],
+) -> dict[ContractKey, ExchangeContractListing]:
+    by_key: dict[ContractKey, ExchangeContractListing] = {}
+    for listing in feed:
+        key = (listing.asset_name, listing.quote_name)
         if key in by_key:
             asset_name, quote_name = key
             raise ValueError(f"Duplicate contract feed key: {asset_name}/{quote_name}")
-        by_key[key] = contract
+        by_key[key] = listing
     return by_key
 
 
 async def _ensure_quotes_and_assets(
     session: AsyncSession,
-    api_contracts: list[ContractInfo],
+    exchange_listings: list[ExchangeContractListing],
     logger: SectionLogger,
 ) -> None:
     """Upsert the asset/quote rows that the contracts reference as FK targets."""
-    quotes = {Quote(name=c.quote) for c in api_contracts}
-    assets = {Asset(name=c.asset_name) for c in api_contracts}
+    quotes = {Quote(name=listing.quote_name) for listing in exchange_listings}
+    assets = {Asset(name=listing.asset_name) for listing in exchange_listings}
 
     await bulk_insert(session, Quote, quotes, on_conflict="ignore")
     logger.debug("Inserted %d unique quotes", len(quotes))
@@ -170,13 +172,13 @@ async def _apply_plan(
     """Persist a precomputed reconciliation plan without reclassifying operations."""
     added_rows = [
         Contract(
-            asset_name=contract.asset_name,
-            quote_name=contract.quote,
+            asset_name=listing.asset_name,
+            quote_name=listing.quote_name,
             section_name=section_name,
-            funding_interval=contract.funding_interval,
+            funding_interval=listing.funding_interval,
             deprecated=False,
         )
-        for contract in plan.added
+        for listing in plan.added
     ]
     await bulk_insert(session, Contract, added_rows)
 

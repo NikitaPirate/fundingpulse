@@ -18,7 +18,7 @@ from fundingpulse.time import (
 )
 from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
-from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
+from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class BackpackExchange(BaseExchange):
     def _format_symbol(self, contract: TrackedContract) -> str:
         return f"{contract.asset_name}_{contract.quote_name}_PERP_{contract.funding_interval}"
 
-    async def get_contracts(self) -> list[ContractInfo]:
+    async def get_contracts(self) -> list[ExchangeContractListing]:
         response = await self._api_get(f"{self.API_ENDPOINT}/markets")
 
         assert isinstance(response, list)
@@ -46,9 +46,9 @@ class BackpackExchange(BaseExchange):
                 funding_interval = market["fundingInterval"] / (1000 * 60 * 60)
 
                 contracts.append(
-                    ContractInfo(
+                    ExchangeContractListing(
                         asset_name=asset_name,
-                        quote=quote_name,
+                        quote_name=quote_name,
                         funding_interval=funding_interval,
                         section_name=self.EXCHANGE_ID,
                     )

@@ -7,7 +7,7 @@ for standardization (GOLD -> XAU, SILVER -> XAG).
 from uuid import UUID
 
 from fundingpulse.tracker.contracts import TrackedContract
-from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
+from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 from fundingpulse.tracker.exchanges.hyperliquid import HyperliquidExchange
 
 # Symbol mapping for standardization (API symbol -> Database symbol)
@@ -35,7 +35,7 @@ class HyperliquidXyzExchange(HyperliquidExchange):
         xyz_symbol = _REVERSE_MAP.get(db_symbol, db_symbol)  # "GOLD" or fallback
         return f"xyz:{xyz_symbol}"
 
-    async def get_contracts(self) -> list[ContractInfo]:
+    async def get_contracts(self) -> list[ExchangeContractListing]:
         # Call parent to get raw data with dex=xyz
         raw_contracts = await super().get_contracts()
 
@@ -46,9 +46,9 @@ class HyperliquidXyzExchange(HyperliquidExchange):
             mapped_name = _SYMBOL_MAP.get(asset_part, asset_part)
 
             mapped_contracts.append(
-                ContractInfo(
+                ExchangeContractListing(
                     asset_name=mapped_name,
-                    quote=contract.quote,
+                    quote_name=contract.quote_name,
                     funding_interval=contract.funding_interval,
                     section_name=self.EXCHANGE_ID,
                 )

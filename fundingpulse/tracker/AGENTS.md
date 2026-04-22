@@ -34,7 +34,7 @@ All in `exchanges/`. Each extends `BaseExchange` ABC and must implement:
 - `EXCHANGE_ID: str` — unique identifier, used as section_name
 - `_FETCH_STEP: int` — batch size in hours for history fetching. Derived from API limits and minimum funding interval. Documented per-exchange.
 - `_format_symbol()` — convert TrackedContract to exchange-specific symbol string
-- `get_contracts()` → `list[ContractInfo]` — fetch available perpetuals
+- `get_contracts()` → `list[ExchangeContractListing]` — fetch available perpetuals
 - `_fetch_history()` → `list[FundingPoint]` — fetch history within time window
 - `fetch_live()` → `dict[UUID, FundingPoint]` — fetch current rates keyed by contract id
 
@@ -42,7 +42,7 @@ Two patterns for `fetch_live`:
 1. **Batch API** (most exchanges) — single request returns all rates. Override `fetch_live()` directly.
 2. **Individual API** — implement `_fetch_live_single()`, call `fetch_live_parallel()` from utils.py (semaphore-controlled concurrency).
 
-Exchange DTO: `ContractInfo` (asset_name, quote, funding_interval, section_name) and `FundingPoint` (rate, timestamp). These are adapter-internal; orchestrator converts to SQLModel entities.
+Exchange DTO: `ExchangeContractListing` (asset_name, quote_name, funding_interval, section_name) and `FundingPoint` (rate, timestamp). These are adapter-internal; orchestrator converts to SQLModel entities.
 
 Registry in `exchanges/__init__.py`: `EXCHANGES` dict built at import time with validation.
 

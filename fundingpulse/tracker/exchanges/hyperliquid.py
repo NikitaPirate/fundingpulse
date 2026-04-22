@@ -9,7 +9,7 @@ import logging
 from fundingpulse.time import from_unix_milliseconds, utc_now
 from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
-from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
+from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class HyperliquidExchange(BaseExchange):
     def _format_symbol(self, contract: TrackedContract) -> str:
         return contract.asset_name
 
-    async def get_contracts(self) -> list[ContractInfo]:
+    async def get_contracts(self) -> list[ExchangeContractListing]:
         json_payload = {"type": "meta"}
         if self._DEX:
             json_payload["dex"] = self._DEX
@@ -45,9 +45,9 @@ class HyperliquidExchange(BaseExchange):
         contracts = []
         for listing in response["universe"]:
             contracts.append(
-                ContractInfo(
+                ExchangeContractListing(
                     asset_name=listing["name"],
-                    quote="USD",
+                    quote_name="USD",
                     funding_interval=1,
                     section_name=self.EXCHANGE_ID,
                 )

@@ -27,7 +27,7 @@ import logging
 from fundingpulse.time import from_unix_milliseconds, utc_now
 from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
-from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
+from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ class AsterExchange(BaseExchange):
     def _format_symbol(self, contract: TrackedContract) -> str:
         return f"{contract.asset_name}{contract.quote_name}"
 
-    async def get_contracts(self) -> list[ContractInfo]:
+    async def get_contracts(self) -> list[ExchangeContractListing]:
         """Fetch all perpetual contracts with detected funding intervals.
 
         Funding interval detection requires:
@@ -125,9 +125,9 @@ class AsterExchange(BaseExchange):
             base_asset, quote_asset = symbol_to_asset_quote[symbol]
 
             contracts.append(
-                ContractInfo(
+                ExchangeContractListing(
                     asset_name=base_asset,
-                    quote=quote_asset,
+                    quote_name=quote_asset,
                     funding_interval=funding_interval,
                     section_name=self.EXCHANGE_ID,
                 )
