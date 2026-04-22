@@ -6,6 +6,7 @@ from sqlmodel import col
 
 from fundingpulse.models.asset import Asset
 from fundingpulse.models.contract import Contract
+from fundingpulse.models.contract_history_state import ContractHistoryState
 from fundingpulse.models.section import Section
 
 
@@ -51,6 +52,7 @@ async def create_contract(
         funding_interval=funding_interval,
         quote_name=quote_name,
     )
+    contract.history_state = ContractHistoryState(contract_id=contract.id)
     session.add(contract)
     await session.commit()
     await session.refresh(contract)

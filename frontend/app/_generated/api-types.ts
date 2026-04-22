@@ -364,8 +364,6 @@ export interface components {
             special_fields: {
                 [key: string]: unknown;
             };
-            /** Synced */
-            synced: boolean;
         };
         /** ContractSearchResult */
         ContractSearchResult: {

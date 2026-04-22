@@ -7,6 +7,7 @@ from fundingpulse.models.base import UUIDModel
 
 if TYPE_CHECKING:
     from fundingpulse.models.asset import Asset
+    from fundingpulse.models.contract_history_state import ContractHistoryState
     from fundingpulse.models.section import Section
 
 
@@ -15,7 +16,6 @@ class Contract(UUIDModel, table=True):
     section_name: str = Field(foreign_key="section.name")
     funding_interval: int
     quote_name: str = Field(index=True)
-    synced: bool = Field(default=False)
     special_fields: dict[str, Any] = Field(
         default_factory=dict, sa_column=Column(JSON, server_default="{}")
     )
@@ -31,6 +31,15 @@ class Contract(UUIDModel, table=True):
         back_populates="contracts",
         sa_relationship_kwargs={
             "lazy": "selectin",
+        },
+    )
+    history_state: ContractHistoryState = Relationship(
+        back_populates="contract",
+        sa_relationship_kwargs={
+            "lazy": "raise",
+            "uselist": False,
+            "cascade": "all, delete-orphan",
+            "single_parent": True,
         },
     )
 

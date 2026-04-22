@@ -1,4 +1,4 @@
-"""Tests for fundingpulse/tracker/db/utils.py::bulk_insert.
+"""Tests for fundingpulse/tracker/queries/utils.py::bulk_insert.
 
 Tests PostgreSQL-specific conflict handling (DO NOTHING / DO UPDATE SET),
 chunked inserts, and edge cases. Uses real TimescaleDB via testcontainers.
@@ -18,7 +18,7 @@ from fundingpulse.models.historical_funding_point import HistoricalFundingPoint
 from fundingpulse.models.live_funding_point import LiveFundingPoint
 from fundingpulse.testing.helpers.data_helpers import get_or_create_asset, get_or_create_section
 from fundingpulse.time import utc_now
-from fundingpulse.tracker.db.utils import bulk_insert
+from fundingpulse.tracker.queries.utils import bulk_insert
 
 
 async def _mk_deps(session: AsyncSession, asset: str, section: str) -> None:
@@ -131,7 +131,7 @@ async def test_on_conflict_update_leaves_other_fields_unchanged(db_session: Asyn
         section_name="test_ex",
         quote_name="USDT",
         funding_interval=8,
-        synced=True,
+        deprecated=True,
     )
     await bulk_insert(db_session, Contract, [original], on_conflict="ignore")
     await db_session.commit()
@@ -141,7 +141,7 @@ async def test_on_conflict_update_leaves_other_fields_unchanged(db_session: Asyn
         section_name="test_ex",
         quote_name="USDT",
         funding_interval=4,
-        synced=False,
+        deprecated=False,
     )
     await bulk_insert(
         db_session,
@@ -149,7 +149,7 @@ async def test_on_conflict_update_leaves_other_fields_unchanged(db_session: Asyn
         [upsert],
         conflict_target=["asset_name", "section_name", "quote_name"],
         on_conflict="update",
-        update_fields=["funding_interval"],  # synced NOT listed
+        update_fields=["funding_interval"],  # deprecated NOT listed
     )
     await db_session.commit()
 
@@ -157,7 +157,7 @@ async def test_on_conflict_update_leaves_other_fields_unchanged(db_session: Asyn
     rows = result.scalars().all()
     assert len(rows) == 1
     assert rows[0].funding_interval == 4  # updated
-    assert rows[0].synced is True  # unchanged
+    assert rows[0].deprecated is True  # unchanged
 
 
 @pytest.mark.asyncio

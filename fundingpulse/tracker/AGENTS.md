@@ -8,7 +8,7 @@ Scheduler-based service that collects funding rates from crypto exchanges into T
 main.py → DB runtime scope → bootstrap.py → ExchangeOrchestrator (per exchange)
                               ├── update()      — hourly + on startup
                               │   ├── _register_contracts() — sync contract list from exchange API
-                              │   ├── _sync_contract()      — backfill full history (unsynced contracts)
+                              │   ├── _sync_contract()      — backfill full history (history_synced=false)
                               │   └── _update_contract()    — fetch new points since last known
                               └── update_live() — every minute, snapshot current unsettled rates
 ```
@@ -21,7 +21,7 @@ main.py → DB runtime scope → bootstrap.py → ExchangeOrchestrator (per exch
 
 **ExchangeOrchestrator** — per-exchange coordinator. `update()` runs contract registration then processes all contracts concurrently (with semaphore). `update_live()` collects current rates. Both are scheduler job targets. All data operations are methods on the orchestrator:
 - `_register_contracts()` — calls exchange `get_contracts()`, upserts to DB, marks missing as deprecated, signals MV refresher.
-- `_sync_contract()` — backward pagination: fetches history in batches until exchange returns empty. Marks contract `synced=True` when done.
+- `_sync_contract()` — backward pagination: fetches history in batches until exchange returns empty. Marks `ContractHistoryState.history_synced=True` when done.
 - `_update_contract()` — forward fetch: gets new points after the newest known timestamp. Skips if funding_interval hasn't elapsed.
 
 **MaterializedViewRefresher** — debounced (10s default) refresh of `contract_enriched` materialized view. Triggered when contracts change, checked every second by scheduler.
@@ -51,6 +51,11 @@ Uses SQLAlchemy `async_sessionmaker` directly. Session factory is stored as `_db
 Rule: any `select`/`insert`/`text()` goes into query functions in `db/`. Direct session methods (`merge`, `add`) stay inline in business code.
 
 Sessions are short-lived — opened and closed per DB operation to avoid holding connections during API calls.
+
+Historical sync progress is stored in `ContractHistoryState`, not derived from
+`historical_funding_point` in the hot path. Each contract has exactly one state
+row. The tracker updates funding points and the state bounds in the same
+transaction, so crash recovery repeats the last window safely via conflict-ignored inserts.
 
 ## Configuration
 

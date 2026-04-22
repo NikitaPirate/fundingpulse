@@ -29,7 +29,8 @@ Two Python services sharing a domain model, plus a Next.js frontend. Each has it
 - **Asset** — crypto asset (BTC, ETH). PK is `name`.
 - **Section** — exchange identity (binance_usd-m, bybit). PK is `name`. One exchange = one section.
 - **Quote** — quote currency (USDT, USDC, USD). PK is `name`.
-- **Contract** — unique (asset, section, quote) tuple. Central entity linking everything. Has `funding_interval` (hours) and `synced` flag.
+- **Contract** — unique (asset, section, quote) tuple. Central entity linking everything. Has `funding_interval` (hours) and market metadata.
+- **ContractHistoryState** — tracker-owned historical ingestion checkpoint for one contract. Stores `history_synced`, `oldest_timestamp`, and `newest_timestamp`.
 - **HistoricalFundingPoint** — settled funding rate. TimescaleDB hypertable, PK is (contract_id, timestamp).
 - **LiveFundingPoint** — unsettled/current rate snapshot. Same structure as historical, separate hypertable.
 - **Funding rate format** — decimal: 0.0001 = 0.01%. Stored raw, normalized at query time via `funding_interval`.

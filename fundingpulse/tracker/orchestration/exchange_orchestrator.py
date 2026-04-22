@@ -6,18 +6,26 @@ from collections.abc import Sequence
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
+from sqlalchemy.exc import InvalidRequestError
+
 from fundingpulse.db import SessionFactory
 from fundingpulse.models.asset import Asset
 from fundingpulse.models.contract import Contract
+from fundingpulse.models.contract_history_state import ContractHistoryState
 from fundingpulse.models.historical_funding_point import HistoricalFundingPoint
 from fundingpulse.models.live_funding_point import LiveFundingPoint
 from fundingpulse.models.quote import Quote
 from fundingpulse.models.section import Section
 from fundingpulse.time import UtcDateTime, utc_now
-from fundingpulse.tracker.db.contracts import get_active_by_section, get_by_section, upsert_many
-from fundingpulse.tracker.db.funding_points import get_newest_for_contract, get_oldest_for_contract
-from fundingpulse.tracker.db.utils import bulk_insert
 from fundingpulse.tracker.materialized_view_refresher import MaterializedViewRefresher
+from fundingpulse.tracker.queries import contract_history_state
+from fundingpulse.tracker.queries.contracts import (
+    get_active_by_section,
+    get_active_by_section_with_history_state,
+    get_by_section,
+    upsert_many,
+)
+from fundingpulse.tracker.queries.utils import bulk_insert
 
 if TYPE_CHECKING:
     from fundingpulse.tracker.exchanges.base import BaseExchange
@@ -67,7 +75,7 @@ class ExchangeOrchestrator:
             return
 
         async with self._db.begin() as session:
-            contracts = await get_active_by_section(session, self._section_name)
+            contracts = await get_active_by_section_with_history_state(session, self._section_name)
 
         if not contracts:
             logger.warning(f"No contracts found for {self._section_name}")
@@ -197,6 +205,7 @@ class ExchangeOrchestrator:
             ]
 
             await upsert_many(session, contracts_to_upsert)
+            await contract_history_state.create_missing_for_section(session, self._section_name)
 
             logger.info(
                 f"[{self._section_name}] Contract sync completed: "
@@ -213,10 +222,32 @@ class ExchangeOrchestrator:
     async def _process_all_contracts(self, contracts: Sequence[Contract]) -> list[tuple[int, int]]:
         """Process all contracts concurrently."""
         logger.debug(f"[{self._section_name}] Starting gather for {len(contracts)} contracts")
-        tasks = [self._process_contract(contract) for contract in contracts]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results: list[tuple[int, int]] = [(0, 0)] * len(contracts)
+        tasks: list[tuple[int, asyncio.Task[tuple[int, int]]]] = []
+        skipped_count = 0
+        now = utc_now()
+
+        for index, contract in enumerate(contracts):
+            state = self._require_history_state(contract)
+            if self._is_fresh_synced_contract(contract, state, now):
+                skipped_count += 1
+                continue
+            tasks.append((index, asyncio.create_task(self._process_contract(contract))))
+
+        if skipped_count > 0:
+            logger.debug(
+                f"[{self._section_name}] Skipped {skipped_count} fresh history-synced contracts"
+            )
+
+        if not tasks:
+            logger.debug(f"[{self._section_name}] Gather complete")
+            return results
+
+        task_results = await asyncio.gather(*(task for _, task in tasks), return_exceptions=True)
+        for (index, _), result in zip(tasks, task_results, strict=True):
+            results[index] = result if not isinstance(result, BaseException) else (0, 0)
         logger.debug(f"[{self._section_name}] Gather complete")
-        return [r if not isinstance(r, BaseException) else (0, 0) for r in results]
+        return results
 
     async def _process_contract(self, contract: Contract) -> tuple[int, int]:
         """Process a single contract with timeout and error isolation.
@@ -224,8 +255,9 @@ class ExchangeOrchestrator:
         Returns:
             (was_updated, points): 1/0 flag and number of new data points.
         """
+        state = self._require_history_state(contract)
         try:
-            if not contract.synced:
+            if not state.history_synced:
                 async with asyncio.timeout(600.0):
                     points = await self._sync_contract(contract)
             else:
@@ -234,11 +266,11 @@ class ExchangeOrchestrator:
             return (1 if points > 0 else 0, points)
         except TimeoutError:
             contract_id = f"{contract.asset.name}/{contract.quote_name}"
-            timeout_duration = "10m" if not contract.synced else "1m"
+            timeout_duration = "10m" if not state.history_synced else "1m"
             logger.warning(
                 f"[{self._section_name}] {contract_id} timed out after "
                 f"{timeout_duration} — operation: "
-                f"{'sync' if not contract.synced else 'update'}"
+                f"{'sync' if not state.history_synced else 'update'}"
             )
             return (0, 0)
         except Exception as e:
@@ -250,12 +282,13 @@ class ExchangeOrchestrator:
             return (0, 0)
 
     async def _sync_contract(self, contract: Contract) -> int:
-        """Fetch full history backwards until no more data; mark contract as synced.
+        """Fetch full history backwards until no more data; mark history as synced.
 
         Opens/closes sessions per DB operation to avoid holding connections
         during long API calls.
         """
-        if contract.synced:
+        state = self._require_history_state(contract)
+        if state.history_synced:
             logger.debug(
                 f"[{self._section_name}] {contract.asset.name}/{contract.quote_name} "
                 f"already synced, skipping"
@@ -268,13 +301,12 @@ class ExchangeOrchestrator:
 
         total_points = 0
         batch_count = 0
+        before_timestamp = (
+            state.oldest_timestamp - timedelta(seconds=1) if state.oldest_timestamp else None
+        )
 
         while True:
             batch_count += 1
-
-            async with self._db.begin() as session:
-                oldest = await get_oldest_for_contract(session, contract.id)
-                before_timestamp = oldest.timestamp - timedelta(seconds=1) if oldest else None
 
             logger.debug(
                 f"[{self._section_name}] Sync batch #{batch_count}: "
@@ -285,16 +317,24 @@ class ExchangeOrchestrator:
             points = await self._exchange_adapter.fetch_history_before(contract, before_timestamp)
 
             if not points:
-                async with self._db.begin() as session:
-                    merged_contract = await session.merge(contract)
-                    merged_contract.synced = True
-                logger.info(
-                    f"[{self._section_name}] No more history for "
-                    f"{contract.asset.name}/{contract.quote_name}, marking as synced "
-                    f"(total batches: {batch_count}, total points: {total_points})"
-                )
+                if self._has_history_bounds(state):
+                    async with self._db.begin() as session:
+                        await contract_history_state.mark_history_synced(session, contract.id)
+                    state.history_synced = True
+                    logger.info(
+                        f"[{self._section_name}] No more history for "
+                        f"{contract.asset.name}/{contract.quote_name}, marking history as synced "
+                        f"(total batches: {batch_count}, total points: {total_points})"
+                    )
+                else:
+                    logger.debug(
+                        f"[{self._section_name}] No history yet for "
+                        f"{contract.asset.name}/{contract.quote_name}; keeping history unsynced"
+                    )
                 break
 
+            batch_oldest = min(p.timestamp for p in points)
+            batch_newest = max(p.timestamp for p in points)
             funding_records = [
                 HistoricalFundingPoint(
                     contract_id=contract.id,
@@ -308,15 +348,31 @@ class ExchangeOrchestrator:
                 await bulk_insert(
                     session, HistoricalFundingPoint, funding_records, on_conflict="ignore"
                 )
+                await contract_history_state.update_bounds(
+                    session,
+                    contract.id,
+                    oldest_timestamp=batch_oldest,
+                    newest_timestamp=batch_newest,
+                )
 
             batch_points = len(points)
             total_points += batch_points
+            state.oldest_timestamp = (
+                batch_oldest
+                if state.oldest_timestamp is None
+                else min(state.oldest_timestamp, batch_oldest)
+            )
+            state.newest_timestamp = (
+                batch_newest
+                if state.newest_timestamp is None
+                else max(state.newest_timestamp, batch_newest)
+            )
+            before_timestamp = batch_oldest - timedelta(seconds=1)
 
             logger.debug(
                 f"[{self._section_name}] Sync batch #{batch_count}: "
                 f"{contract.asset.name}/{contract.quote_name} — "
-                f"{batch_points} points (oldest: {min(p.timestamp for p in points)}, "
-                f"newest: {max(p.timestamp for p in points)})"
+                f"{batch_points} points (oldest: {batch_oldest}, newest: {batch_newest})"
             )
 
             if batch_count % PROGRESS_LOG_BATCH_INTERVAL == 0:
@@ -324,8 +380,7 @@ class ExchangeOrchestrator:
                     f"[{self._section_name}] Sync progress for "
                     f"{contract.asset.name}/{contract.quote_name}: "
                     f"batch #{batch_count}, {total_points} total points fetched, "
-                    f"latest batch range: {min(p.timestamp for p in points)} to "
-                    f"{max(p.timestamp for p in points)}"
+                    f"latest batch range: {batch_oldest} to {batch_newest}"
                 )
 
         return total_points
@@ -341,17 +396,9 @@ class ExchangeOrchestrator:
             f"{contract.asset.name}/{contract.quote_name}"
         )
 
-        async with self._db.begin() as session:
-            newest = await get_newest_for_contract(session, contract.id)
-
-        after_timestamp = newest.timestamp + timedelta(seconds=1) if newest else None
-
-        if after_timestamp is None:
-            logger.warning(
-                f"[{self._section_name}] No historical data for "
-                f"{contract.asset.name}/{contract.quote_name}, run sync first"
-            )
-            return 0
+        state = self._require_history_state(contract)
+        newest_timestamp = self._require_synced_newest_timestamp(contract, state)
+        after_timestamp = newest_timestamp + timedelta(seconds=1)
 
         now = utc_now()
         time_since_last = now - after_timestamp
@@ -370,6 +417,7 @@ class ExchangeOrchestrator:
         if not points:
             return 0
 
+        batch_newest = max(point.timestamp for point in points)
         funding_records = [
             HistoricalFundingPoint(
                 contract_id=contract.id,
@@ -383,6 +431,13 @@ class ExchangeOrchestrator:
             await bulk_insert(
                 session, HistoricalFundingPoint, funding_records, on_conflict="ignore"
             )
+            await contract_history_state.update_bounds(
+                session,
+                contract.id,
+                newest_timestamp=batch_newest,
+            )
+
+        state.newest_timestamp = max(newest_timestamp, batch_newest)
 
         return len(points)
 
@@ -406,3 +461,45 @@ class ExchangeOrchestrator:
             f"{len(contracts) - updated_count} unchanged, "
             f"completed in {duration}"
         )
+
+    def _require_history_state(self, contract: Contract) -> ContractHistoryState:
+        try:
+            state = contract.history_state
+        except InvalidRequestError as e:
+            raise RuntimeError(
+                f"[{self._section_name}] History state was not loaded for contract {contract.id}"
+            ) from e
+        if state is None:
+            raise RuntimeError(
+                f"[{self._section_name}] Missing history state for contract {contract.id}"
+            )
+        return state
+
+    def _is_fresh_synced_contract(
+        self,
+        contract: Contract,
+        state: ContractHistoryState,
+        now: UtcDateTime,
+    ) -> bool:
+        if not state.history_synced:
+            return False
+
+        after_timestamp = self._require_synced_newest_timestamp(contract, state) + timedelta(
+            seconds=1
+        )
+        return now - after_timestamp < timedelta(hours=contract.funding_interval)
+
+    def _has_history_bounds(self, state: ContractHistoryState) -> bool:
+        return state.oldest_timestamp is not None and state.newest_timestamp is not None
+
+    def _require_synced_newest_timestamp(
+        self,
+        contract: Contract,
+        state: ContractHistoryState,
+    ) -> UtcDateTime:
+        if state.newest_timestamp is None:
+            raise RuntimeError(
+                f"[{self._section_name}] History-synced contract {contract.id} "
+                "has no newest timestamp"
+            )
+        return state.newest_timestamp
