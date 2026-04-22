@@ -13,12 +13,12 @@ from collections.abc import Callable
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pytest
 
-from fundingpulse.models.asset import Asset
-from fundingpulse.models.contract import Contract
 from fundingpulse.time import utc_datetime
+from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges import EXCHANGES
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
@@ -42,20 +42,18 @@ def load_fixture(exchange_id: str) -> dict[str, Any]:
     return json.loads((FIXTURES_DIR / filename).read_text())
 
 
-def build_contract(defn: dict[str, Any]) -> Contract:
-    """Build a Contract with attached Asset for adapter tests — no DB required.
+def build_contract(defn: dict[str, Any]) -> TrackedContract:
+    """Build a tracked contract for adapter tests — no DB required.
 
     Mirrors verify_exchange.py:_build_contract_for_checks.
-    Contract.id is auto-generated via default_factory=uuid.uuid4.
     """
-    contract = Contract(
+    return TrackedContract(
+        id=uuid4(),
         asset_name=defn["asset_name"],
         quote_name=defn["quote_name"],
         section_name=defn["section_name"],
         funding_interval=defn["funding_interval"],
     )
-    contract.asset = Asset(name=defn["asset_name"])
-    return contract
 
 
 def make_adapter(exchange_id: str, state: dict[str, Any] | None = None) -> BaseExchange:
@@ -166,7 +164,7 @@ async def test_fetch_history(exchange_id: str, mock_http: Callable[..., object])
 async def test_fetch_live(
     exchange_id: str, mock_http: Callable[..., object], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """fetch_live returns a dict of Contract → FundingPoint with valid values."""
+    """fetch_live returns a dict of contract id → FundingPoint with valid values."""
     fixture = load_fixture(exchange_id)
     scenario = fixture["fetch_live"]
     mock_http(scenario.get("http_get", []), scenario.get("http_post", []))

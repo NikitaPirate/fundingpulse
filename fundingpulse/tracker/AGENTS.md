@@ -33,10 +33,10 @@ main.py → DB runtime scope → bootstrap.py → ExchangeOrchestrator (per exch
 All in `exchanges/`. Each extends `BaseExchange` ABC and must implement:
 - `EXCHANGE_ID: str` — unique identifier, used as section_name
 - `_FETCH_STEP: int` — batch size in hours for history fetching. Derived from API limits and minimum funding interval. Documented per-exchange.
-- `_format_symbol()` — convert Contract to exchange-specific symbol string
+- `_format_symbol()` — convert TrackedContract to exchange-specific symbol string
 - `get_contracts()` → `list[ContractInfo]` — fetch available perpetuals
 - `_fetch_history()` → `list[FundingPoint]` — fetch history within time window
-- `fetch_live()` → `dict[Contract, FundingPoint]` — fetch current rates
+- `fetch_live()` → `dict[UUID, FundingPoint]` — fetch current rates keyed by contract id
 
 Two patterns for `fetch_live`:
 1. **Batch API** (most exchanges) — single request returns all rates. Override `fetch_live()` directly.

@@ -6,13 +6,13 @@ import sys
 from collections.abc import Awaitable
 from dataclasses import dataclass
 from datetime import timedelta
+from uuid import uuid4
 
 from rich.console import Console
 from rich.table import Table
 
-from fundingpulse.models.asset import Asset
-from fundingpulse.models.contract import Contract
 from fundingpulse.time import utc_now
+from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges import EXCHANGES
 from fundingpulse.tracker.exchanges.dto import ContractInfo
 from fundingpulse.tracker.infrastructure import http_client
@@ -120,15 +120,14 @@ def _render_contracts(contracts: list[ContractInfo], preview_limit: int, show_al
     console.print(table)
 
 
-def _build_contract_for_checks(exchange_id: str, contract_info: ContractInfo) -> Contract:
-    contract = Contract(
+def _build_contract_for_checks(exchange_id: str, contract_info: ContractInfo) -> TrackedContract:
+    return TrackedContract(
+        id=uuid4(),
         asset_name=contract_info.asset_name,
         quote_name=contract_info.quote,
         section_name=exchange_id,
         funding_interval=contract_info.funding_interval,
     )
-    contract.asset = Asset(name=contract_info.asset_name)
-    return contract
 
 
 def _warn_if_contract_count_looks_truncated(contracts: list[ContractInfo]) -> None:
@@ -381,7 +380,7 @@ async def verify_exchange(
         "  [green][OK][/green] Required methods: get_contracts, "
         "fetch_history_before, fetch_history_after"
     )
-    console.print("  [green][OK][/green] Live method: fetch_live(list[Contract])")
+    console.print("  [green][OK][/green] Live method: fetch_live(list[TrackedContract])")
 
     console.print("\n[bold]Step 2: API - get_contracts()[/bold]")
     try:
@@ -466,11 +465,10 @@ async def verify_exchange(
         console.print(f"  [green][OK][/green] fetch_live() returned {len(live_rates)} rates")
 
         if live_rates:
-            sample_contract, sample_rate = next(iter(live_rates.items()))
+            _, sample_rate = next(iter(live_rates.items()))
             rate_pct = sample_rate.rate * 100
-            sample_label = f"{sample_contract.asset_name}/{sample_contract.quote_name}"
             console.print(
-                f"  [dim]Sample: {sample_label} = {sample_rate.rate:.6f} ({rate_pct:.4f}%)[/dim]"
+                f"  [dim]Sample: {contract_label} = {sample_rate.rate:.6f} ({rate_pct:.4f}%)[/dim]"
             )
         else:
             console.print(

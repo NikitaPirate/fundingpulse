@@ -6,9 +6,10 @@ _FETCH_STEP = 398 hours (400 - 2 safety buffer).
 
 import logging
 from typing import Any
+from uuid import UUID
 
-from fundingpulse.models.contract import Contract
 from fundingpulse.time import from_unix_milliseconds, utc_now
+from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
 
@@ -24,8 +25,8 @@ class OkxExchange(BaseExchange):
     # 400 records max, 1-hour min interval -> 398 hours (400 - 2 safety buffer)
     _FETCH_STEP = 398
 
-    def _format_symbol(self, contract: Contract) -> str:
-        return f"{contract.asset.name}-{contract.quote_name}-SWAP"
+    def _format_symbol(self, contract: TrackedContract) -> str:
+        return f"{contract.asset_name}-{contract.quote_name}-SWAP"
 
     async def get_contracts(self) -> list[ContractInfo]:
         response: Any = await self._api_get(
@@ -51,7 +52,7 @@ class OkxExchange(BaseExchange):
         return contracts
 
     async def _fetch_history(
-        self, contract: Contract, start_ms: int, end_ms: int
+        self, contract: TrackedContract, start_ms: int, end_ms: int
     ) -> list[FundingPoint]:
         symbol = self._format_symbol(contract)
 
@@ -75,7 +76,7 @@ class OkxExchange(BaseExchange):
 
         return points
 
-    async def _fetch_live_single(self, contract: Contract) -> FundingPoint:
+    async def _fetch_live_single(self, contract: TrackedContract) -> FundingPoint:
         symbol = self._format_symbol(contract)
 
         response: Any = await self._api_get(
@@ -92,5 +93,5 @@ class OkxExchange(BaseExchange):
         rate = float(record["fundingRate"])
         return FundingPoint(rate=rate, timestamp=now)
 
-    async def fetch_live(self, contracts: list[Contract]) -> dict[Contract, FundingPoint]:
+    async def fetch_live(self, contracts: list[TrackedContract]) -> dict[UUID, FundingPoint]:
         return await self._fetch_live_parallel(contracts)

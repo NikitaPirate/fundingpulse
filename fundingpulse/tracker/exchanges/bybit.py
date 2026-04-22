@@ -10,8 +10,8 @@ Live rates use batch API: single /v5/market/tickers request fetches all contract
 import logging
 from typing import Any
 
-from fundingpulse.models.contract import Contract
 from fundingpulse.time import from_unix_milliseconds, utc_now
+from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
 
@@ -29,9 +29,9 @@ class BybitExchange(BaseExchange):
 
     _SUFFIXES = {"USDT": "USDT", "USDC": "PERP"}
 
-    def _format_symbol(self, contract: Contract) -> str:
+    def _format_symbol(self, contract: TrackedContract) -> str:
         suffix = self._SUFFIXES.get(contract.quote_name, contract.quote_name)
-        return f"{contract.asset.name}{suffix}"
+        return f"{contract.asset_name}{suffix}"
 
     async def get_contracts(self) -> list[ContractInfo]:
         all_contracts = []
@@ -67,7 +67,7 @@ class BybitExchange(BaseExchange):
         return contracts
 
     async def _fetch_history(
-        self, contract: Contract, start_ms: int, end_ms: int
+        self, contract: TrackedContract, start_ms: int, end_ms: int
     ) -> list[FundingPoint]:
         symbol = self._format_symbol(contract)
 

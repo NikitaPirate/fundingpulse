@@ -6,8 +6,8 @@ _FETCH_STEP = 498 hours (500 - 2 safety buffer).
 
 import logging
 
-from fundingpulse.models.contract import Contract
 from fundingpulse.time import from_unix_milliseconds, utc_now
+from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
 
@@ -26,8 +26,8 @@ class HyperliquidExchange(BaseExchange):
     # Optional DEX parameter for sub-dex variants (e.g., "xyz")
     _DEX: str | None = None
 
-    def _format_symbol(self, contract: Contract) -> str:
-        return contract.asset.name
+    def _format_symbol(self, contract: TrackedContract) -> str:
+        return contract.asset_name
 
     async def get_contracts(self) -> list[ContractInfo]:
         json_payload = {"type": "meta"}
@@ -56,7 +56,7 @@ class HyperliquidExchange(BaseExchange):
         return contracts
 
     async def _fetch_history(
-        self, contract: Contract, start_ms: int, end_ms: int
+        self, contract: TrackedContract, start_ms: int, end_ms: int
     ) -> list[FundingPoint]:
         symbol = self._format_symbol(contract)
 

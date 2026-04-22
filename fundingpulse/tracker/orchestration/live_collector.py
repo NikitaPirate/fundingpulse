@@ -13,7 +13,9 @@ critical path, not live sampling.
 from __future__ import annotations
 
 from fundingpulse.db import SessionFactory
+from fundingpulse.models.contract import Contract
 from fundingpulse.models.live_funding_point import LiveFundingPoint
+from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.orchestration.section_logger import SectionLogger
 from fundingpulse.tracker.queries.contracts import get_active_by_section
@@ -35,18 +37,19 @@ async def collect_live(
             return
 
         logger.debug("Collecting live rates for %d contracts", len(contracts))
-        rates = await adapter.fetch_live(list(contracts))
+        tracked_contracts = [_to_tracked_contract(contract) for contract in contracts]
+        rates = await adapter.fetch_live(tracked_contracts)
         if not rates:
             logger.warning("No live rates collected")
             return
 
         records = [
             LiveFundingPoint(
-                contract_id=contract.id,
+                contract_id=contract_id,
                 timestamp=rate.timestamp,
                 funding_rate=rate.rate,
             )
-            for contract, rate in rates.items()
+            for contract_id, rate in rates.items()
         ]
 
         async with db.begin() as session:
@@ -57,7 +60,7 @@ async def collect_live(
         logger.error("Failed to collect live rates: %s", e, exc_info=True)
 
 
-async def _load_active_contracts(db: SessionFactory, section_name: str) -> list:
+async def _load_active_contracts(db: SessionFactory, section_name: str) -> list[Contract]:
     async with db.begin() as session:
         return list(await get_active_by_section(session, section_name))
 
@@ -68,3 +71,14 @@ def _log_outcome(logger: SectionLogger, *, success: int, expected: int) -> None:
         logger.info("Live collection: %d ok, %d failed", success, failed)
     else:
         logger.debug("Live collection: all %d rates collected", success)
+
+
+def _to_tracked_contract(contract: Contract) -> TrackedContract:
+    """Temporary ORM bridge until live queries return tracker read models."""
+    return TrackedContract(
+        id=contract.id,
+        asset_name=contract.asset_name,
+        section_name=contract.section_name,
+        quote_name=contract.quote_name,
+        funding_interval=contract.funding_interval,
+    )

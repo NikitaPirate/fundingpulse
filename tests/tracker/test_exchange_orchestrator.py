@@ -12,6 +12,7 @@ from fundingpulse.models.contract_history_state import ContractHistoryState
 from fundingpulse.models.historical_funding_point import HistoricalFundingPoint
 from fundingpulse.testing.helpers.data_helpers import create_contract
 from fundingpulse.time import UtcDateTime, utc_now
+from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
 from fundingpulse.tracker.orchestration.history_sync import process_contracts
@@ -35,19 +36,19 @@ class _FakeExchange(BaseExchange):
         self.before_calls: list[UtcDateTime | None] = []
         self.after_calls: list[UtcDateTime] = []
 
-    def _format_symbol(self, contract: Contract) -> str:
+    def _format_symbol(self, contract: TrackedContract) -> str:
         return contract.asset_name
 
     async def get_contracts(self) -> list[ContractInfo]:
         return []
 
     async def _fetch_history(
-        self, contract: Contract, start_ms: int, end_ms: int
+        self, contract: TrackedContract, start_ms: int, end_ms: int
     ) -> list[FundingPoint]:
         raise NotImplementedError
 
     async def fetch_history_before(
-        self, contract: Contract, before_timestamp: UtcDateTime | None
+        self, contract: TrackedContract, before_timestamp: UtcDateTime | None
     ) -> list[FundingPoint]:
         self.before_calls.append(before_timestamp)
         if not self.before_responses:
@@ -55,7 +56,7 @@ class _FakeExchange(BaseExchange):
         return self.before_responses.pop(0)
 
     async def fetch_history_after(
-        self, contract: Contract, after_timestamp: UtcDateTime
+        self, contract: TrackedContract, after_timestamp: UtcDateTime
     ) -> list[FundingPoint]:
         self.after_calls.append(after_timestamp)
         if not self.after_responses:

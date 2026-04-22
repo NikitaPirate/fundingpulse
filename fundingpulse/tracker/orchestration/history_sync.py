@@ -39,6 +39,7 @@ from fundingpulse.models.contract import Contract
 from fundingpulse.models.contract_history_state import ContractHistoryState
 from fundingpulse.models.historical_funding_point import HistoricalFundingPoint
 from fundingpulse.time import UtcDateTime, utc_now
+from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import FundingPoint
 from fundingpulse.tracker.orchestration.section_logger import SectionLogger
@@ -105,12 +106,16 @@ async def process_contracts(
     now = utc_now()
 
     for index, contract in enumerate(contracts):
+        tracked_contract = _to_tracked_contract(contract)
         state = _require_history_state(contract)
-        if _is_fresh_synced(contract, state, now):
+        if _is_fresh_synced(tracked_contract, state, now):
             skipped += 1
             continue
         tasks.append(
-            (index, asyncio.create_task(_process_one(adapter, contract, state, db, logger)))
+            (
+                index,
+                asyncio.create_task(_process_one(adapter, tracked_contract, state, db, logger)),
+            )
         )
 
     if skipped:
@@ -127,13 +132,13 @@ async def process_contracts(
 
 async def _process_one(
     adapter: BaseExchange,
-    contract: Contract,
+    contract: TrackedContract,
     state: ContractHistoryState,
     db: SessionFactory,
     logger: SectionLogger,
 ) -> tuple[int, int]:
     """Run sync or update for one contract with a timeout and error isolation."""
-    label = f"{contract.asset.name}/{contract.quote_name}"
+    label = f"{contract.asset_name}/{contract.quote_name}"
     try:
         if not state.history_synced:
             async with asyncio.timeout(SYNC_TIMEOUT_SECONDS):
@@ -154,13 +159,13 @@ async def _process_one(
 
 async def _sync(
     adapter: BaseExchange,
-    contract: Contract,
+    contract: TrackedContract,
     state: ContractHistoryState,
     db: SessionFactory,
     logger: SectionLogger,
 ) -> int:
     """Backfill full history by walking backwards until the API returns empty."""
-    label = f"{contract.asset.name}/{contract.quote_name}"
+    label = f"{contract.asset_name}/{contract.quote_name}"
     logger.debug("Starting sync for %s", label)
 
     total_points = 0
@@ -244,13 +249,13 @@ async def _finalize_sync_if_ready(
 
 async def _update(
     adapter: BaseExchange,
-    contract: Contract,
+    contract: TrackedContract,
     state: ContractHistoryState,
     db: SessionFactory,
     logger: SectionLogger,
 ) -> int:
     """Fetch points newer than the stored cursor, guarded by funding_interval."""
-    label = f"{contract.asset.name}/{contract.quote_name}"
+    label = f"{contract.asset_name}/{contract.quote_name}"
     newest_ts = _require_synced_newest_timestamp(contract, state)
     after_ts = newest_ts + timedelta(seconds=1)
 
@@ -327,7 +332,7 @@ def _require_history_state(contract: Contract) -> ContractHistoryState:
 
 
 def _is_fresh_synced(
-    contract: Contract,
+    contract: TrackedContract,
     state: ContractHistoryState,
     now: UtcDateTime,
 ) -> bool:
@@ -339,9 +344,20 @@ def _is_fresh_synced(
 
 
 def _require_synced_newest_timestamp(
-    contract: Contract,
+    contract: TrackedContract,
     state: ContractHistoryState,
 ) -> UtcDateTime:
     if state.newest_timestamp is None:
         raise RuntimeError(f"History-synced contract {contract.id} has no newest timestamp")
     return state.newest_timestamp
+
+
+def _to_tracked_contract(contract: Contract) -> TrackedContract:
+    """Temporary ORM bridge until history queries return tracker read models."""
+    return TrackedContract(
+        id=contract.id,
+        asset_name=contract.asset_name,
+        section_name=contract.section_name,
+        quote_name=contract.quote_name,
+        funding_interval=contract.funding_interval,
+    )

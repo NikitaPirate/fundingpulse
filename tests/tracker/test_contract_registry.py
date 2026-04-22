@@ -12,6 +12,7 @@ from fundingpulse.models.contract import Contract
 from fundingpulse.models.contract_history_state import ContractHistoryState
 from fundingpulse.models.quote import Quote
 from fundingpulse.testing.helpers.data_helpers import create_contract, get_or_create_section
+from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
 from fundingpulse.tracker.orchestration.contract_registry import (
@@ -33,7 +34,7 @@ class _RegistryExchange(BaseExchange):
         super().__init__()
         self._contracts = list(contracts)
 
-    def _format_symbol(self, contract: Contract) -> str:
+    def _format_symbol(self, contract: TrackedContract) -> str:
         return contract.asset_name
 
     async def get_contracts(self) -> list[ContractInfo]:
@@ -41,7 +42,7 @@ class _RegistryExchange(BaseExchange):
 
     async def _fetch_history(
         self,
-        contract: Contract,
+        contract: TrackedContract,
         start_ms: int,
         end_ms: int,
     ) -> list[FundingPoint]:

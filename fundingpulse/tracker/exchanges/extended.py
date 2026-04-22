@@ -17,8 +17,8 @@ _FETCH_STEP = 2160 hours (90 days with 24 records/day = 2160, safely under 4326 
 
 import logging
 
-from fundingpulse.models.contract import Contract
 from fundingpulse.time import from_unix_milliseconds, utc_now
+from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
 
@@ -34,8 +34,8 @@ class ExtendedExchange(BaseExchange):
     # 90 days * 24 hours = 2160 hours (safely under 4326 record limit)
     _FETCH_STEP = 2160
 
-    def _format_symbol(self, contract: Contract) -> str:
-        return f"{contract.asset.name}-{contract.quote_name}"
+    def _format_symbol(self, contract: TrackedContract) -> str:
+        return f"{contract.asset_name}-{contract.quote_name}"
 
     async def get_contracts(self) -> list[ContractInfo]:
         response = await self._api_get(f"{self.API_ENDPOINT}/api/v1/info/markets")
@@ -67,7 +67,7 @@ class ExtendedExchange(BaseExchange):
         return contracts
 
     async def _fetch_history(
-        self, contract: Contract, start_ms: int, end_ms: int
+        self, contract: TrackedContract, start_ms: int, end_ms: int
     ) -> list[FundingPoint]:
         symbol = self._format_symbol(contract)
 
