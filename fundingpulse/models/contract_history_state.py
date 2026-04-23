@@ -1,14 +1,11 @@
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 from uuid import UUID
 
 import sqlalchemy
 from sqlalchemy import CheckConstraint
-from sqlmodel import Field, Relationship, SQLModel
+from sqlmodel import Field, SQLModel
 
 from fundingpulse.time import UtcDateTime, utc_now
-
-if TYPE_CHECKING:
-    from fundingpulse.models.contract import Contract
 
 
 class ContractHistoryState(SQLModel, table=True):
@@ -43,11 +40,4 @@ class ContractHistoryState(SQLModel, table=True):
         default_factory=utc_now,
         sa_type=cast(Any, sqlalchemy.DateTime(timezone=True)),
         sa_column_kwargs={"server_default": sqlalchemy.text("NOW()")},
-    )
-
-    contract: Contract = Relationship(
-        back_populates="history_state",
-        sa_relationship_kwargs={
-            "lazy": "selectin",
-        },
     )

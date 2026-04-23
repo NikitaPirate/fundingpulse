@@ -52,8 +52,9 @@ async def create_contract(
         funding_interval=funding_interval,
         quote_name=quote_name,
     )
-    contract.history_state = ContractHistoryState(contract_id=contract.id)
+    state = ContractHistoryState(contract_id=contract.id)
     session.add(contract)
+    session.add(state)
     await session.commit()
     await session.refresh(contract)
     return contract

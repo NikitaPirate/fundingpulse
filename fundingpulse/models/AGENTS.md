@@ -21,15 +21,15 @@ Section (PK: name) ─┘       │
 
 ## Models
 
-**Asset** — crypto asset. `name` (PK), optional `market_cap_rank` (indexed). Has contracts relationship.
+**Asset** — crypto asset. `name` (PK), optional `market_cap_rank` (indexed). No ORM relationships; join/query explicitly when contracts are needed.
 
-**Section** — exchange identity. `name` (PK), `special_fields` (JSON). Has contracts relationship.
+**Section** — exchange identity. `name` (PK), `special_fields` (JSON). No ORM relationships; join/query explicitly when contracts are needed.
 
 **Quote** — quote currency. `name` (PK) only.
 
-**Contract** — the central linking entity. Fields: `asset_name`, `section_name`, `quote_name`, `funding_interval` (hours), `special_fields` (JSON), `deprecated` (bool — no longer listed by exchange). Eagerly loads asset and section via `selectin`; tracker queries explicitly load history state when needed.
+**Contract** — the central linking entity. Fields: `asset_name`, `section_name`, `quote_name`, `funding_interval` (hours), `special_fields` (JSON), `deprecated` (bool — no longer listed by exchange). Holds FK names only; it intentionally has no ORM relationships to asset, section, or history state.
 
-**ContractHistoryState** — tracker-owned historical ingestion checkpoint. One row per contract. Fields: `contract_id`, `history_synced` (bool — historical backfill completed), `oldest_timestamp`, `newest_timestamp`, `updated_at`. Invariant: `history_synced=True` requires both timestamp bounds to be present.
+**ContractHistoryState** — tracker-owned historical ingestion checkpoint. One row per contract. Fields: `contract_id`, `history_synced` (bool — historical backfill completed), `oldest_timestamp`, `newest_timestamp`, `updated_at`. No ORM relationship back to `Contract`; query explicitly by `contract_id`. Invariant: `history_synced=True` requires both timestamp bounds to be present.
 
 **HistoricalFundingPoint** / **LiveFundingPoint** — identical structure, separate tables. Both are TimescaleDB hypertables partitioned by `timestamp`. Composite PK: (contract_id, timestamp).
 
