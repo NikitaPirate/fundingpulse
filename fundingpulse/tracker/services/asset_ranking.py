@@ -5,12 +5,9 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from sqlalchemy import update
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from fundingpulse.db import SessionFactory
-from fundingpulse.models.asset import Asset
 from fundingpulse.tracker.infrastructure import http_client
+from fundingpulse.tracker.queries import assets as asset_queries
 
 logger = logging.getLogger(__name__)
 
@@ -32,16 +29,12 @@ async def update_rankings(session_factory: SessionFactory) -> None:
         }
 
         async with session_factory.begin() as session:
-            assets = await _get_all_assets(session)
+            assets = await asset_queries.get_all(session)
             matched = 0
             for asset in assets:
                 rank = symbol_to_rank.get(asset.name.upper())
                 if rank != asset.market_cap_rank:
-                    await session.execute(
-                        update(Asset)
-                        .where(Asset.name == asset.name)  # type: ignore[arg-type]
-                        .values(market_cap_rank=rank)
-                    )
+                    await asset_queries.update_market_cap_rank(session, asset.name, rank)
                 if rank is not None:
                     matched += 1
 
@@ -54,13 +47,6 @@ async def update_rankings(session_factory: SessionFactory) -> None:
     except Exception:
         logger.exception("Failed to update asset rankings")
         raise
-
-
-async def _get_all_assets(session: AsyncSession) -> list[Asset]:
-    from sqlmodel import select
-
-    result = await session.execute(select(Asset))
-    return list(result.scalars().all())
 
 
 async def _fetch_coingecko_top250() -> list[dict[str, Any]]:

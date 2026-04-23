@@ -48,15 +48,15 @@ Registry in `exchanges/__init__.py`: `EXCHANGES` dict built at import time with 
 
 ## Database access
 
-Uses SQLAlchemy `async_sessionmaker` directly. Session factory is stored as `_db: SessionFactory` and accessed exclusively via `self._db.begin()` (never bare `self._db()`). `.begin()` provides auto-commit on success, auto-rollback on exception. For read-only operations this has zero cost — COMMIT on a clean session is a no-op at the DBAPI level.
+Uses SQLAlchemy `async_sessionmaker` directly. Open explicit transaction scopes with `.begin()` for writes, read+write units that must be atomic, and multi-step operations whose changes must commit or roll back together. Plain `session_factory()` is fine for short read-only operations.
 
-Rule: any `select`/`insert`/`text()` goes into query functions. Direct session methods (`merge`, `add`) and small lifecycle ORM mutations stay inline in business code when they operate on already loaded rows.
+Rule: any `select`/`insert`/`update`/`delete`/`text()` goes into query functions. Direct session methods (`merge`, `add`) and small lifecycle ORM mutations stay inline in business code when they operate on already loaded rows.
 
 Tracker business logic uses SQLModel ORM rows as scalar data carriers for persisted rows. Shared models intentionally have no ORM relationships, so cross-row composition is represented by explicit query projections such as `ContractWithHistoryState`, never by implicit `contract.history_state` or `asset.contracts` access.
 
 ORM rows may be used after their loading session closes only as carriers of already loaded scalar fields. Tracker sessions must use `expire_on_commit=False`; enabling expiration would make detached scalar reads unsafe.
 
-Sessions are short-lived — opened and closed per DB operation to avoid holding connections during API calls.
+Sessions are short-lived — opened and closed per DB operation to avoid holding connections or transactions during exchange API calls.
 
 Historical sync progress is stored in `ContractHistoryState`, not derived from
 `historical_funding_point` in the hot path. Each contract has exactly one state

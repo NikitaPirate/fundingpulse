@@ -75,8 +75,6 @@ unfixable = []
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
-"fundingpulse/api/queries/funding_data.py" = ["E501"]
-"fundingpulse/api/queries/funding_sql_composer.py" = ["E501"]
 
 [tool.ruff.lint.flake8-annotations]
 allow-star-arg-any = true
