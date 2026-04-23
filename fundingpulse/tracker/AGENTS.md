@@ -21,8 +21,8 @@ main.py → DB runtime scope → bootstrap.py → ExchangeOrchestrator (per exch
 
 **orchestration/** — four siblings that split the per-exchange workflow:
 - `exchange_orchestrator.py` — thin facade with `update()` / `update_live()` scheduler entry points. Bundles dependencies (adapter, DB, MV refresher, logger), delegates to the modules below, and logs cycle duration.
-- `contract_registry.py` — `register_contracts()`: fetches exchange contracts, ensures assets/quotes, computes an explicit reconciliation plan (`added`, `deprecated`, `reactivated`, `interval_changes`) from `RegisteredContract` read models, applies lifecycle changes through query-layer commands, creates history-state rows, and signals the MV refresher only when contracts changed.
-- `history_sync.py` — `run_history_updates()` / `process_contracts()`: loads active history state snapshots (`TrackedContract` + `ContractHistoryStateSnapshot`), runs a per-contract task that either backfills (`_sync`, backward pagination until empty) or incrementally extends (`_update`, forward fetch gated by `funding_interval`). Both paths persist via `persist_batch()`, which relies on `update_bounds`' SQL-level `LEAST`/`GREATEST` merge. Sync timeout is 10 min, update is 1 min.
+- `contract_registry.py` — `register_contracts()`: fetches exchange contracts, ensures assets/quotes, computes an explicit reconciliation plan (`added`, `deprecated`, `reactivated`, `interval_changes`) from ORM `Contract` rows, applies rare lifecycle changes through ORM mutation inside the session, creates history-state rows, and signals the MV refresher only when contracts changed.
+- `history_sync.py` — `run_history_updates()` / `process_contracts()`: loads active `ContractWithHistoryState` projections (`Contract` + `ContractHistoryState`), runs a per-contract task that either backfills (`_sync`, backward pagination until empty) or incrementally extends (`_update`, forward fetch gated by `funding_interval`). Both paths persist via `persist_batch()`, which relies on `update_bounds`' SQL-level `LEAST`/`GREATEST` merge. Sync timeout is 10 min, update is 1 min.
 - `live_collector.py` — `collect_live()`: fetches live rates, inserts a snapshot, logs success/failure. Errors are logged and swallowed (minute cadence must not stall).
 - `section_logger.py` — `LoggerAdapter` that prepends `[section]` to every record; centralises the prefix that was duplicated across the layer.
 
@@ -33,7 +33,7 @@ main.py → DB runtime scope → bootstrap.py → ExchangeOrchestrator (per exch
 All in `exchanges/`. Each extends `BaseExchange` ABC and must implement:
 - `EXCHANGE_ID: str` — unique identifier, used as section_name
 - `_FETCH_STEP: int` — batch size in hours for history fetching. Derived from API limits and minimum funding interval. Documented per-exchange.
-- `_format_symbol()` — convert TrackedContract to exchange-specific symbol string
+- `_format_symbol()` — convert a scalar ORM `Contract` row to exchange-specific symbol string
 - `get_contracts()` → `list[ExchangeContractListing]` — fetch available perpetuals
 - `_fetch_history()` → `list[FundingPoint]` — fetch history within time window
 - `fetch_live()` → `dict[UUID, FundingPoint]` — fetch current rates keyed by contract id
@@ -50,7 +50,11 @@ Registry in `exchanges/__init__.py`: `EXCHANGES` dict built at import time with 
 
 Uses SQLAlchemy `async_sessionmaker` directly. Session factory is stored as `_db: SessionFactory` and accessed exclusively via `self._db.begin()` (never bare `self._db()`). `.begin()` provides auto-commit on success, auto-rollback on exception. For read-only operations this has zero cost — COMMIT on a clean session is a no-op at the DBAPI level.
 
-Rule: any `select`/`insert`/`text()` goes into query functions in `db/`. Direct session methods (`merge`, `add`) stay inline in business code.
+Rule: any `select`/`insert`/`text()` goes into query functions. Direct session methods (`merge`, `add`) and small lifecycle ORM mutations stay inline in business code when they operate on already loaded rows.
+
+Tracker business logic uses SQLModel ORM rows as scalar data carriers for persisted rows. Shared models intentionally have no ORM relationships, so cross-row composition is represented by explicit query projections such as `ContractWithHistoryState`, never by implicit `contract.history_state` or `asset.contracts` access.
+
+ORM rows may be used after their loading session closes only as carriers of already loaded scalar fields. Tracker sessions must use `expire_on_commit=False`; enabling expiration would make detached scalar reads unsafe.
 
 Sessions are short-lived — opened and closed per DB operation to avoid holding connections during API calls.
 

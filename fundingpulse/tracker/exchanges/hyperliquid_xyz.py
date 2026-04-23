@@ -6,7 +6,7 @@ for standardization (GOLD -> XAU, SILVER -> XAG).
 
 from uuid import UUID
 
-from fundingpulse.tracker.contracts import TrackedContract
+from fundingpulse.models.contract import Contract
 from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 from fundingpulse.tracker.exchanges.hyperliquid import HyperliquidExchange
 
@@ -29,7 +29,7 @@ class HyperliquidXyzExchange(HyperliquidExchange):
     EXCHANGE_ID = "hyperliquid-xyz"
     _DEX = "xyz"
 
-    def _format_symbol(self, contract: TrackedContract) -> str:
+    def _format_symbol(self, contract: Contract) -> str:
         """Convert database symbol to API format (XAU -> xyz:GOLD)."""
         db_symbol = contract.asset_name  # "XAU"
         xyz_symbol = _REVERSE_MAP.get(db_symbol, db_symbol)  # "GOLD" or fallback
@@ -68,7 +68,7 @@ class HyperliquidXyzExchange(HyperliquidExchange):
 
         return mapped_rates
 
-    async def fetch_live(self, contracts: list[TrackedContract]) -> dict[UUID, FundingPoint]:
+    async def fetch_live(self, contracts: list[Contract]) -> dict[UUID, FundingPoint]:
         # Use database symbol (XAU) as key, not API format (xyz:GOLD)
         symbol_to_contract = {c.asset_name: c for c in contracts}
         all_rates = await self._fetch_live_batch()

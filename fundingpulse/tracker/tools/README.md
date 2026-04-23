@@ -23,7 +23,7 @@ uv run verify hyperliquid
 1. **Protocol Validation**
    - Verifies `EXCHANGE_ID` constant exists
    - Verifies required methods: `get_contracts()`, `fetch_history_before()`, `fetch_history_after()`
-   - Verifies live method: `fetch_live(list[TrackedContract])`
+   - Verifies live method: `fetch_live(list[Contract])`
 
 2. **API: get_contracts()**
    - Makes real API call to exchange
@@ -77,7 +77,7 @@ Verifying exchange adapter: hyperliquid
 Step 1: Protocol Validation
   [OK] EXCHANGE_ID: hyperliquid
   [OK] Required methods: get_contracts, fetch_history_before, fetch_history_after
-  [OK] Live method: fetch_live(list[TrackedContract])
+  [OK] Live method: fetch_live(list[Contract])
 
 Step 2: API - get_contracts()
   [OK] Retrieved N contracts

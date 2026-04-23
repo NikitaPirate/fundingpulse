@@ -10,13 +10,13 @@ _FETCH_STEP = 1000 hours (no API limit, convenient batch size).
 import logging
 from uuid import UUID
 
+from fundingpulse.models.contract import Contract
 from fundingpulse.time import (
     UtcDateTime,
     from_unix_milliseconds,
     from_utc_iso8601,
     utc_now,
 )
-from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 
@@ -30,7 +30,7 @@ class BackpackExchange(BaseExchange):
     API_ENDPOINT = "https://api.backpack.exchange/api/v1"
     _FETCH_STEP = 1000
 
-    def _format_symbol(self, contract: TrackedContract) -> str:
+    def _format_symbol(self, contract: Contract) -> str:
         return f"{contract.asset_name}_{contract.quote_name}_PERP_{contract.funding_interval}"
 
     async def get_contracts(self) -> list[ExchangeContractListing]:
@@ -57,7 +57,7 @@ class BackpackExchange(BaseExchange):
         return contracts
 
     async def fetch_history_before(
-        self, contract: TrackedContract, before_timestamp: UtcDateTime | None
+        self, contract: Contract, before_timestamp: UtcDateTime | None
     ) -> list[FundingPoint]:
         # Remove interval suffix for API (accepts both formats)
         api_symbol = self._format_symbol(contract).rsplit("_", 1)[0]
@@ -89,7 +89,7 @@ class BackpackExchange(BaseExchange):
         return points
 
     async def fetch_history_after(
-        self, contract: TrackedContract, after_timestamp: UtcDateTime
+        self, contract: Contract, after_timestamp: UtcDateTime
     ) -> list[FundingPoint]:
         api_symbol = self._format_symbol(contract).rsplit("_", 1)[0]
         funding_interval = contract.funding_interval
@@ -123,7 +123,7 @@ class BackpackExchange(BaseExchange):
         return points
 
     async def _fetch_history(
-        self, contract: TrackedContract, start_ms: int, end_ms: int
+        self, contract: Contract, start_ms: int, end_ms: int
     ) -> list[FundingPoint]:
         start_time = from_unix_milliseconds(start_ms)
         end_time = from_unix_milliseconds(end_ms)
@@ -154,7 +154,7 @@ class BackpackExchange(BaseExchange):
 
         return points
 
-    async def _fetch_live_single(self, contract: TrackedContract) -> FundingPoint:
+    async def _fetch_live_single(self, contract: Contract) -> FundingPoint:
         api_symbol = self._format_symbol(contract).rsplit("_", 1)[0]
 
         response = await self._api_get(
@@ -171,5 +171,5 @@ class BackpackExchange(BaseExchange):
         rate = float(raw_record["fundingRate"])
         return FundingPoint(rate=rate, timestamp=utc_now())
 
-    async def fetch_live(self, contracts: list[TrackedContract]) -> dict[UUID, FundingPoint]:
+    async def fetch_live(self, contracts: list[Contract]) -> dict[UUID, FundingPoint]:
         return await self._fetch_live_parallel(contracts)

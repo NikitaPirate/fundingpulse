@@ -16,7 +16,7 @@ from fundingpulse.db import SessionFactory
 from fundingpulse.models.live_funding_point import LiveFundingPoint
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.orchestration.section_logger import SectionLogger
-from fundingpulse.tracker.queries.contracts import get_active_tracked_by_section
+from fundingpulse.tracker.queries.contracts import get_active_by_section
 from fundingpulse.tracker.queries.utils import bulk_insert
 
 
@@ -30,7 +30,7 @@ async def collect_live(
     """Fetch live rates for all active contracts and persist the snapshot."""
     try:
         async with db() as session:
-            contracts = list(await get_active_tracked_by_section(session, section_name))
+            contracts = list(await get_active_by_section(session, section_name))
         if not contracts:
             logger.warning("No active contracts for live collection")
             return

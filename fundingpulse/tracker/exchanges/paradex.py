@@ -36,6 +36,7 @@ import logging
 from datetime import timedelta
 from uuid import UUID
 
+from fundingpulse.models.contract import Contract
 from fundingpulse.time import (
     UtcDateTime,
     from_unix_milliseconds,
@@ -43,7 +44,6 @@ from fundingpulse.time import (
     to_unix_milliseconds,
     utc_now,
 )
-from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 
@@ -66,7 +66,7 @@ class ParadexExchange(BaseExchange):
         # Cache entries are automatically removed via pop() when used in fetch_history_after
         self._live_cache: dict[str, dict[int, list[float]]] = {}
 
-    def _format_symbol(self, contract: TrackedContract) -> str:
+    def _format_symbol(self, contract: Contract) -> str:
         return f"{contract.asset_name}-USD-PERP"
 
     async def get_contracts(self) -> list[ExchangeContractListing]:
@@ -100,7 +100,7 @@ class ParadexExchange(BaseExchange):
         return contracts
 
     async def fetch_history_before(
-        self, contract: TrackedContract, before_timestamp: UtcDateTime | None
+        self, contract: Contract, before_timestamp: UtcDateTime | None
     ) -> list[FundingPoint]:
         """Fetch historical funding points before timestamp.
 
@@ -110,7 +110,7 @@ class ParadexExchange(BaseExchange):
         - Divides by 8 to convert 8-hour period rates to hourly
 
         Args:
-            contract: TrackedContract to fetch history for
+            contract: Contract to fetch history for
             before_timestamp: Fetch data before this time (None = from now)
 
         Returns:
@@ -162,7 +162,7 @@ class ParadexExchange(BaseExchange):
         return hourly_points
 
     async def fetch_history_after(
-        self, contract: TrackedContract, after_timestamp: UtcDateTime
+        self, contract: Contract, after_timestamp: UtcDateTime
     ) -> list[FundingPoint]:
         """Fetch funding points after timestamp using live cache optimization.
 
@@ -177,7 +177,7 @@ class ParadexExchange(BaseExchange):
         recent hours where we already have sufficient data.
 
         Args:
-            contract: TrackedContract to fetch history for
+            contract: Contract to fetch history for
             after_timestamp: Fetch data after this time
 
         Returns:
@@ -302,7 +302,7 @@ class ParadexExchange(BaseExchange):
         return points
 
     async def _fetch_history(
-        self, contract: TrackedContract, start_ms: int, end_ms: int
+        self, contract: Contract, start_ms: int, end_ms: int
     ) -> list[FundingPoint]:
         """Fetch funding history for contract within time window.
 
@@ -314,7 +314,7 @@ class ParadexExchange(BaseExchange):
             f"Use fetch_history_before() or fetch_history_after() instead."
         )
 
-    async def _fetch_live_single(self, contract: TrackedContract) -> FundingPoint:
+    async def _fetch_live_single(self, contract: Contract) -> FundingPoint:
         """Fetch current funding rate for single contract.
 
         Stores the rate in live cache for fetch_after optimization.
@@ -366,7 +366,7 @@ class ParadexExchange(BaseExchange):
 
         return FundingPoint(rate=hourly_rate, timestamp=now)
 
-    async def fetch_live(self, contracts: list[TrackedContract]) -> dict[UUID, FundingPoint]:
+    async def fetch_live(self, contracts: list[Contract]) -> dict[UUID, FundingPoint]:
         """Fetch unsettled rates for given contracts.
 
         Individual API pattern (no batch endpoint).

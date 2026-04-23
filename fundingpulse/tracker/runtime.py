@@ -114,7 +114,10 @@ def _resolve_session_kwargs(service_session_kwargs: dict[str, Any] | None) -> di
     defaults = {
         "expire_on_commit": False,
     }
-    return {**defaults, **(service_session_kwargs or {})}
+    resolved = {**defaults, **(service_session_kwargs or {})}
+    if resolved.get("expire_on_commit") is not False:
+        raise ValueError("Tracker sessions must use expire_on_commit=False")
+    return resolved
 
 
 def _filter_exchanges_by_instance(

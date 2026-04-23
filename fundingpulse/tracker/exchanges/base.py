@@ -8,8 +8,8 @@ from uuid import UUID
 
 from httpx import HTTPError
 
+from fundingpulse.models.contract import Contract
 from fundingpulse.time import UtcDateTime, to_unix_milliseconds, utc_now
-from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 from fundingpulse.tracker.infrastructure import http_client
 
@@ -78,8 +78,8 @@ class BaseExchange(ABC):
             raise NotImplementedError(f"{cls.__name__}: missing EXCHANGE_ID class attribute")
 
     @abstractmethod
-    def _format_symbol(self, contract: TrackedContract) -> str:
-        """Format exchange-specific symbol from a tracked contract."""
+    def _format_symbol(self, contract: Contract) -> str:
+        """Format exchange-specific symbol from a contract row."""
         ...
 
     @abstractmethod
@@ -89,7 +89,7 @@ class BaseExchange(ABC):
 
     @abstractmethod
     async def _fetch_history(
-        self, contract: TrackedContract, start_ms: int, end_ms: int
+        self, contract: Contract, start_ms: int, end_ms: int
     ) -> list[FundingPoint]:
         """Fetch funding history for contract within time window.
 
@@ -99,7 +99,7 @@ class BaseExchange(ABC):
         ...
 
     async def fetch_history_before(
-        self, contract: TrackedContract, before_timestamp: UtcDateTime | None
+        self, contract: Contract, before_timestamp: UtcDateTime | None
     ) -> list[FundingPoint]:
         """Fetch funding points before timestamp (backward sync).
 
@@ -115,7 +115,7 @@ class BaseExchange(ABC):
         return await self._fetch_history(contract, start_ms, end_ms)
 
     async def fetch_history_after(
-        self, contract: TrackedContract, after_timestamp: UtcDateTime
+        self, contract: Contract, after_timestamp: UtcDateTime
     ) -> list[FundingPoint]:
         """Fetch funding points after timestamp (forward sync).
 
@@ -126,7 +126,7 @@ class BaseExchange(ABC):
         end_ms = to_unix_milliseconds(utc_now())
         return await self._fetch_history(contract, start_ms, end_ms)
 
-    async def fetch_live(self, contracts: list[TrackedContract]) -> dict[UUID, FundingPoint]:
+    async def fetch_live(self, contracts: list[Contract]) -> dict[UUID, FundingPoint]:
         """Fetch unsettled rates for given contracts.
 
         Default implementation calls _fetch_live_batch() and maps results
@@ -152,7 +152,7 @@ class BaseExchange(ABC):
             "Override fetch_live() for non-batch exchanges."
         )
 
-    async def _fetch_live_single(self, contract: TrackedContract) -> FundingPoint:
+    async def _fetch_live_single(self, contract: Contract) -> FundingPoint:
         """Fetch single contract rate — override for individual API exchanges.
 
         Only implement this if exchange lacks batch API.
@@ -160,9 +160,7 @@ class BaseExchange(ABC):
         """
         raise NotImplementedError
 
-    async def _fetch_live_parallel(
-        self, contracts: list[TrackedContract]
-    ) -> dict[UUID, FundingPoint]:
+    async def _fetch_live_parallel(self, contracts: list[Contract]) -> dict[UUID, FundingPoint]:
         """Fetch live rates via parallel per-contract requests.
 
         For exchanges without batch API. Calls _fetch_live_single() for each
@@ -170,7 +168,7 @@ class BaseExchange(ABC):
         each _fetch_live_single() call.
         """
 
-        async def _fetch_one(contract: TrackedContract) -> FundingPoint | None:
+        async def _fetch_one(contract: Contract) -> FundingPoint | None:
             try:
                 return await self._fetch_live_single(contract)
             except HTTPError as e:

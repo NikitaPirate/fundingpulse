@@ -14,13 +14,13 @@ from fundingpulse.testing.helpers.data_helpers import (
 )
 from fundingpulse.time import utc_now
 from fundingpulse.tracker.queries.contracts import (
-    get_active_tracked_by_section,
-    get_contract_history_state_snapshots_by_section,
+    get_active_by_section,
+    get_contracts_with_history_state_by_section,
 )
 
 
 @pytest.mark.asyncio
-async def test_get_contract_history_state_snapshots_returns_active_section_rows_with_state(
+async def test_get_contracts_with_history_state_returns_active_section_rows_with_state(
     db_session: AsyncSession,
 ) -> None:
     section_name = "history_query_ex"
@@ -68,22 +68,25 @@ async def test_get_contract_history_state_snapshots_returns_active_section_rows_
     )
     await db_session.commit()
 
-    rows = list(await get_contract_history_state_snapshots_by_section(db_session, section_name))
+    rows = list(await get_contracts_with_history_state_by_section(db_session, section_name))
 
     assert len(rows) == 1
-    contract, state = rows[0]
+    contract = rows[0].contract
+    state = rows[0].state
     assert contract.id == included.id
+    assert isinstance(contract, Contract)
     assert contract.asset_name == "BTC"
     assert contract.section_name == section_name
     assert contract.quote_name == "USDT"
     assert contract.funding_interval == 8
+    assert isinstance(state, ContractHistoryState)
     assert state.history_synced is True
     assert state.oldest_timestamp == oldest
     assert state.newest_timestamp == newest
 
 
 @pytest.mark.asyncio
-async def test_get_active_tracked_by_section_returns_runtime_contracts(
+async def test_get_active_by_section_returns_runtime_contracts(
     db_session: AsyncSession,
 ) -> None:
     section_name = "live_query_ex"
@@ -111,11 +114,12 @@ async def test_get_active_tracked_by_section_returns_runtime_contracts(
     )
     await db_session.commit()
 
-    contracts = list(await get_active_tracked_by_section(db_session, section_name))
+    contracts = list(await get_active_by_section(db_session, section_name))
 
     assert len(contracts) == 1
     contract = contracts[0]
     assert contract.id == included.id
+    assert isinstance(contract, Contract)
     assert contract.asset_name == "BTC"
     assert contract.section_name == section_name
     assert contract.quote_name == "USDT"

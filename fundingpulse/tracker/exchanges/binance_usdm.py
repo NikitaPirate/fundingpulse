@@ -9,8 +9,8 @@ import asyncio
 import logging
 from typing import Any
 
+from fundingpulse.models.contract import Contract
 from fundingpulse.time import from_unix_milliseconds, utc_now
-from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 
@@ -26,7 +26,7 @@ class BinanceUsdmExchange(BaseExchange):
     # 1000 records max, 1-hour min interval -> 1000 hours
     _FETCH_STEP = 1000
 
-    def _format_symbol(self, contract: TrackedContract) -> str:
+    def _format_symbol(self, contract: Contract) -> str:
         return f"{contract.asset_name}{contract.quote_name}"
 
     async def get_contracts(self) -> list[ExchangeContractListing]:
@@ -58,7 +58,7 @@ class BinanceUsdmExchange(BaseExchange):
         return contracts
 
     async def _fetch_history(
-        self, contract: TrackedContract, start_ms: int, end_ms: int
+        self, contract: Contract, start_ms: int, end_ms: int
     ) -> list[FundingPoint]:
         symbol = self._format_symbol(contract)
 

@@ -21,7 +21,6 @@ from fundingpulse.db import SessionFactory
 from fundingpulse.models.asset import Asset
 from fundingpulse.models.contract import Contract
 from fundingpulse.models.quote import Quote
-from fundingpulse.tracker.contracts import RegisteredContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ExchangeContractListing
 from fundingpulse.tracker.orchestration.section_logger import SectionLogger
@@ -34,15 +33,15 @@ ContractKey = tuple[str, str]
 
 @dataclass(frozen=True, slots=True)
 class FundingIntervalChange:
-    contract: RegisteredContract
+    contract: Contract
     new_interval: int
 
 
 @dataclass(frozen=True, slots=True)
 class ReconciliationPlan:
     added: tuple[ExchangeContractListing, ...] = ()
-    deprecated: tuple[RegisteredContract, ...] = ()
-    reactivated: tuple[RegisteredContract, ...] = ()
+    deprecated: tuple[Contract, ...] = ()
+    reactivated: tuple[Contract, ...] = ()
     interval_changes: tuple[FundingIntervalChange, ...] = ()
 
     @property
@@ -78,7 +77,7 @@ async def register_contracts(
 
     async with db.begin() as session:
         await _ensure_quotes_and_assets(session, exchange_listings, logger)
-        existing = await contract_queries.get_registered_by_section(session, section_name)
+        existing = await contract_queries.get_by_section(session, section_name)
         logger.debug("Found %d existing contracts in DB", len(existing))
         plan = _reconcile(existing, exchange_listings)
         await _apply_plan(session, section_name, plan)
@@ -102,7 +101,7 @@ async def register_contracts(
 
 
 def _reconcile(
-    existing: Sequence[RegisteredContract],
+    existing: Sequence[Contract],
     feed: Sequence[ExchangeContractListing],
 ) -> ReconciliationPlan:
     """Calculate explicit lifecycle changes between DB contracts and exchange feed."""
@@ -183,12 +182,11 @@ async def _apply_plan(
     ]
     await bulk_insert(session, Contract, added_rows)
 
-    await contract_queries.mark_deprecated(session, tuple(c.id for c in plan.deprecated))
-    await contract_queries.reactivate(session, tuple(c.id for c in plan.reactivated))
+    for contract in plan.deprecated:
+        contract.deprecated = True
+
+    for contract in plan.reactivated:
+        contract.deprecated = False
 
     for change in plan.interval_changes:
-        await contract_queries.set_funding_interval(
-            session,
-            change.contract.id,
-            change.new_interval,
-        )
+        change.contract.funding_interval = change.new_interval

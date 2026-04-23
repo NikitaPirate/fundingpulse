@@ -11,8 +11,8 @@ from uuid import uuid4
 from rich.console import Console
 from rich.table import Table
 
+from fundingpulse.models.contract import Contract
 from fundingpulse.time import utc_now
-from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges import EXCHANGES
 from fundingpulse.tracker.exchanges.dto import ExchangeContractListing
 from fundingpulse.tracker.infrastructure import http_client
@@ -122,10 +122,8 @@ def _render_contracts(
     console.print(table)
 
 
-def _build_contract_for_checks(
-    exchange_id: str, listing: ExchangeContractListing
-) -> TrackedContract:
-    return TrackedContract(
+def _build_contract_for_checks(exchange_id: str, listing: ExchangeContractListing) -> Contract:
+    return Contract(
         id=uuid4(),
         asset_name=listing.asset_name,
         quote_name=listing.quote_name,
@@ -388,7 +386,7 @@ async def verify_exchange(
         "  [green][OK][/green] Required methods: get_contracts, "
         "fetch_history_before, fetch_history_after"
     )
-    console.print("  [green][OK][/green] Live method: fetch_live(list[TrackedContract])")
+    console.print("  [green][OK][/green] Live method: fetch_live(list[Contract])")
 
     console.print("\n[bold]Step 2: API - get_contracts()[/bold]")
     try:

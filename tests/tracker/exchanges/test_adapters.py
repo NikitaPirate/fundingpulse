@@ -17,8 +17,8 @@ from uuid import uuid4
 
 import pytest
 
+from fundingpulse.models.contract import Contract
 from fundingpulse.time import utc_datetime
-from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges import EXCHANGES
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
@@ -42,12 +42,12 @@ def load_fixture(exchange_id: str) -> dict[str, Any]:
     return json.loads((FIXTURES_DIR / filename).read_text())
 
 
-def build_contract(defn: dict[str, Any]) -> TrackedContract:
-    """Build a tracked contract for adapter tests — no DB required.
+def build_contract(defn: dict[str, Any]) -> Contract:
+    """Build a scalar contract row for adapter tests — no DB required.
 
     Mirrors verify_exchange.py:_build_contract_for_checks.
     """
-    return TrackedContract(
+    return Contract(
         id=uuid4(),
         asset_name=defn["asset_name"],
         quote_name=defn["quote_name"],

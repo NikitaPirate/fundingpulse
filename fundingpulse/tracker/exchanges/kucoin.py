@@ -6,8 +6,8 @@ _FETCH_STEP = 100 hours (empirically tested).
 
 import logging
 
+from fundingpulse.models.contract import Contract
 from fundingpulse.time import from_unix_milliseconds, utc_now
-from fundingpulse.tracker.contracts import TrackedContract
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 
@@ -23,7 +23,7 @@ class KucoinExchange(BaseExchange):
     # Empirically tested
     _FETCH_STEP = 100
 
-    def _format_symbol(self, contract: TrackedContract) -> str:
+    def _format_symbol(self, contract: Contract) -> str:
         return f"{contract.asset_name}{contract.quote_name}M"
 
     async def get_contracts(self) -> list[ExchangeContractListing]:
@@ -62,7 +62,7 @@ class KucoinExchange(BaseExchange):
         return contracts
 
     async def _fetch_history(
-        self, contract: TrackedContract, start_ms: int, end_ms: int
+        self, contract: Contract, start_ms: int, end_ms: int
     ) -> list[FundingPoint]:
         symbol = self._format_symbol(contract)
 
