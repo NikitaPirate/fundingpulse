@@ -13,15 +13,15 @@ from collections.abc import Callable
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pytest
 
-from fundingpulse.models.asset import Asset
 from fundingpulse.models.contract import Contract
 from fundingpulse.time import utc_datetime
 from fundingpulse.tracker.exchanges import EXCHANGES
 from fundingpulse.tracker.exchanges.base import BaseExchange
-from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
+from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 ADAPTER_IDS = sorted(EXCHANGES.keys())
@@ -43,19 +43,17 @@ def load_fixture(exchange_id: str) -> dict[str, Any]:
 
 
 def build_contract(defn: dict[str, Any]) -> Contract:
-    """Build a Contract with attached Asset for adapter tests — no DB required.
+    """Build a scalar contract row for adapter tests — no DB required.
 
     Mirrors verify_exchange.py:_build_contract_for_checks.
-    Contract.id is auto-generated via default_factory=uuid.uuid4.
     """
-    contract = Contract(
+    return Contract(
+        id=uuid4(),
         asset_name=defn["asset_name"],
         quote_name=defn["quote_name"],
         section_name=defn["section_name"],
         funding_interval=defn["funding_interval"],
     )
-    contract.asset = Asset(name=defn["asset_name"])
-    return contract
 
 
 def make_adapter(exchange_id: str, state: dict[str, Any] | None = None) -> BaseExchange:
@@ -112,7 +110,7 @@ class _MockWsConnection:
 @pytest.mark.parametrize("exchange_id", ADAPTER_IDS)
 @pytest.mark.asyncio
 async def test_get_contracts(exchange_id: str, mock_http: Callable[..., object]) -> None:
-    """get_contracts() returns a non-empty list of valid ContractInfo objects."""
+    """get_contracts() returns a non-empty list of valid ExchangeContractListing objects."""
     fixture = load_fixture(exchange_id)
     scenario = fixture["get_contracts"]
     mock_http(scenario.get("http_get", []), scenario.get("http_post", []))
@@ -121,7 +119,7 @@ async def test_get_contracts(exchange_id: str, mock_http: Callable[..., object])
     contracts = await adapter.get_contracts()
 
     assert len(contracts) >= scenario["expected_count_gte"]
-    assert all(isinstance(c, ContractInfo) for c in contracts)
+    assert all(isinstance(c, ExchangeContractListing) for c in contracts)
     assert all(c.section_name == adapter.EXCHANGE_ID for c in contracts)
     assert all(c.funding_interval > 0 for c in contracts)
 
@@ -129,7 +127,7 @@ async def test_get_contracts(exchange_id: str, mock_http: Callable[..., object])
         matched = [c for c in contracts if c.asset_name == sample["asset_name"]]
         assert matched, f"Expected contract {sample['asset_name']!r} not found in result"
         c = matched[0]
-        assert c.quote == sample["quote"]
+        assert c.quote_name == sample["quote"]
         assert c.funding_interval == sample["funding_interval"]
 
 
@@ -166,7 +164,7 @@ async def test_fetch_history(exchange_id: str, mock_http: Callable[..., object])
 async def test_fetch_live(
     exchange_id: str, mock_http: Callable[..., object], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """fetch_live returns a dict of Contract → FundingPoint with valid values."""
+    """fetch_live returns a dict of contract id → FundingPoint with valid values."""
     fixture = load_fixture(exchange_id)
     scenario = fixture["fetch_live"]
     mock_http(scenario.get("http_get", []), scenario.get("http_post", []))

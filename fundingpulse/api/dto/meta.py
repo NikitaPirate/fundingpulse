@@ -41,6 +41,5 @@ class ContractMeta(BaseModel):
     section_name: str
     quote_name: str
     funding_interval: int
-    synced: bool
     special_fields: dict[str, Any]
     deprecated: bool

@@ -34,6 +34,7 @@ _FETCH_STEP = 6 hours = 4320 records (5000 limit - safety buffer).
 import asyncio
 import logging
 from datetime import timedelta
+from uuid import UUID
 
 from fundingpulse.models.contract import Contract
 from fundingpulse.time import (
@@ -44,7 +45,7 @@ from fundingpulse.time import (
     utc_now,
 )
 from fundingpulse.tracker.exchanges.base import BaseExchange
-from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
+from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 
 logger = logging.getLogger(__name__)
 
@@ -66,9 +67,9 @@ class ParadexExchange(BaseExchange):
         self._live_cache: dict[str, dict[int, list[float]]] = {}
 
     def _format_symbol(self, contract: Contract) -> str:
-        return f"{contract.asset.name}-USD-PERP"
+        return f"{contract.asset_name}-USD-PERP"
 
-    async def get_contracts(self) -> list[ContractInfo]:
+    async def get_contracts(self) -> list[ExchangeContractListing]:
         response = await self._api_get(f"{self.API_ENDPOINT}/markets")
 
         assert isinstance(response, dict)
@@ -88,9 +89,9 @@ class ParadexExchange(BaseExchange):
             asset_name = market["base_currency"]
 
             contracts.append(
-                ContractInfo(
+                ExchangeContractListing(
                     asset_name=asset_name,
-                    quote="USD",
+                    quote_name="USD",
                     funding_interval=1,  # We aggregate to 1-hour intervals
                     section_name=self.EXCHANGE_ID,
                 )
@@ -365,7 +366,7 @@ class ParadexExchange(BaseExchange):
 
         return FundingPoint(rate=hourly_rate, timestamp=now)
 
-    async def fetch_live(self, contracts: list[Contract]) -> dict[Contract, FundingPoint]:
+    async def fetch_live(self, contracts: list[Contract]) -> dict[UUID, FundingPoint]:
         """Fetch unsettled rates for given contracts.
 
         Individual API pattern (no batch endpoint).

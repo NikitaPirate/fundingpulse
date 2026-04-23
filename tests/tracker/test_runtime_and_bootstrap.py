@@ -22,7 +22,7 @@ def test_build_runtime_config_merges_db_runtime_overrides() -> None:
         ),
         db_tuning=TrackerDBTuning.model_construct(
             engine_kwargs={"pool_size": 99},
-            session_kwargs={"expire_on_commit": True},
+            session_kwargs={},
         ),
         app=TrackerAppSettings.model_construct(),
     )
@@ -40,7 +40,33 @@ def test_build_runtime_config_merges_db_runtime_overrides() -> None:
     assert config.db.connection_url.startswith("timescaledb+psycopg://tracker:tracker@localhost:")
     assert config.db.engine_kwargs["pool_size"] == 99
     assert config.db.engine_kwargs["pool_pre_ping"] is True
-    assert config.db.session_kwargs == {"expire_on_commit": True}
+    assert config.db.session_kwargs == {"expire_on_commit": False}
+
+
+def test_build_runtime_config_rejects_expiring_tracker_sessions() -> None:
+    settings = Settings(
+        db=DBSettings.model_construct(
+            host="localhost",
+            port=5432,
+            user="tracker",
+            password="tracker",
+            dbname="fundingpulse",
+        ),
+        db_tuning=TrackerDBTuning.model_construct(
+            session_kwargs={"expire_on_commit": True},
+        ),
+        app=TrackerAppSettings.model_construct(),
+    )
+    args = Namespace(
+        exchanges=None,
+        debug_exchanges=None,
+        debug_exchanges_live=None,
+        instance_id=None,
+        total_instances=None,
+    )
+
+    with pytest.raises(ValueError, match="expire_on_commit=False"):
+        build_runtime_config(args=args, settings=settings, all_exchanges={"bybit", "okx"})
 
 
 @pytest.mark.asyncio

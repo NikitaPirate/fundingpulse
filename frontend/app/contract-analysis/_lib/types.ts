@@ -14,7 +14,6 @@ export type ContractMeta = {
   sectionName: string;
   quoteName: string;
   fundingInterval: number;
-  synced: boolean;
   deprecated: boolean;
 };
 

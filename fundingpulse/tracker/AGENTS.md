@@ -7,22 +7,24 @@ Scheduler-based service that collects funding rates from crypto exchanges into T
 ```
 main.py → DB runtime scope → bootstrap.py → ExchangeOrchestrator (per exchange)
                               ├── update()      — hourly + on startup
-                              │   ├── _register_contracts() — sync contract list from exchange API
-                              │   ├── _sync_contract()      — backfill full history (unsynced contracts)
-                              │   └── _update_contract()    — fetch new points since last known
+                              │   ├── contract_registry.register_contracts  — sync contract list
+                              │   └── history_sync.run_history_updates      — sync/update history
                               └── update_live() — every minute, snapshot current unsettled rates
+                                  └── live_collector.collect_live
 ```
 
 ## Key components
 
 **main.py** — owns the top-level DB runtime scope and shared HTTP client, then hands a ready `SessionFactory` to bootstrap.
 
-**bootstrap.py** — wires everything: resolves exchanges, creates APScheduler, registers jobs around the provided `SessionFactory`. Each exchange gets two cron jobs: `{exchange}_update` (hourly) and `{exchange}_live` (every minute, staggered).
+**bootstrap.py** — wires everything: resolves exchanges, seeds the `section` rows once, creates APScheduler, registers jobs around the provided `SessionFactory`. Each exchange gets two cron jobs: `{exchange}_update` (hourly) and `{exchange}_live` (every minute, staggered).
 
-**ExchangeOrchestrator** — per-exchange coordinator. `update()` runs contract registration then processes all contracts concurrently (with semaphore). `update_live()` collects current rates. Both are scheduler job targets. All data operations are methods on the orchestrator:
-- `_register_contracts()` — calls exchange `get_contracts()`, upserts to DB, marks missing as deprecated, signals MV refresher.
-- `_sync_contract()` — backward pagination: fetches history in batches until exchange returns empty. Marks contract `synced=True` when done.
-- `_update_contract()` — forward fetch: gets new points after the newest known timestamp. Skips if funding_interval hasn't elapsed.
+**orchestration/** — four siblings that split the per-exchange workflow:
+- `exchange_orchestrator.py` — thin facade with `update()` / `update_live()` scheduler entry points. Bundles dependencies (adapter, DB, MV refresher, logger), delegates to the modules below, and logs cycle duration.
+- `contract_registry.py` — `register_contracts()`: fetches exchange contracts, ensures assets/quotes, computes an explicit reconciliation plan (`added`, `deprecated`, `reactivated`, `interval_changes`) from ORM `Contract` rows, applies rare lifecycle changes through ORM mutation inside the session, creates history-state rows, and signals the MV refresher only when contracts changed.
+- `history_sync.py` — `run_history_updates()` / `process_contracts()`: loads active `ContractWithHistoryState` projections (`Contract` + `ContractHistoryState`), runs a per-contract task that either backfills (`_sync`, backward pagination until empty) or incrementally extends (`_update`, forward fetch gated by `funding_interval`). Both paths persist via `persist_batch()`, which relies on `update_bounds`' SQL-level `LEAST`/`GREATEST` merge. Sync timeout is 10 min, update is 1 min.
+- `live_collector.py` — `collect_live()`: fetches live rates, inserts a snapshot, logs success/failure. Errors are logged and swallowed (minute cadence must not stall).
+- `section_logger.py` — `LoggerAdapter` that prepends `[section]` to every record; centralises the prefix that was duplicated across the layer.
 
 **MaterializedViewRefresher** — debounced (10s default) refresh of `contract_enriched` materialized view. Triggered when contracts change, checked every second by scheduler.
 
@@ -31,26 +33,35 @@ main.py → DB runtime scope → bootstrap.py → ExchangeOrchestrator (per exch
 All in `exchanges/`. Each extends `BaseExchange` ABC and must implement:
 - `EXCHANGE_ID: str` — unique identifier, used as section_name
 - `_FETCH_STEP: int` — batch size in hours for history fetching. Derived from API limits and minimum funding interval. Documented per-exchange.
-- `_format_symbol()` — convert Contract to exchange-specific symbol string
-- `get_contracts()` → `list[ContractInfo]` — fetch available perpetuals
+- `_format_symbol()` — convert a scalar ORM `Contract` row to exchange-specific symbol string
+- `get_contracts()` → `list[ExchangeContractListing]` — fetch available perpetuals
 - `_fetch_history()` → `list[FundingPoint]` — fetch history within time window
-- `fetch_live()` → `dict[Contract, FundingPoint]` — fetch current rates
+- `fetch_live()` → `dict[UUID, FundingPoint]` — fetch current rates keyed by contract id
 
 Two patterns for `fetch_live`:
 1. **Batch API** (most exchanges) — single request returns all rates. Override `fetch_live()` directly.
 2. **Individual API** — implement `_fetch_live_single()`, call `fetch_live_parallel()` from utils.py (semaphore-controlled concurrency).
 
-Exchange DTO: `ContractInfo` (asset_name, quote, funding_interval, section_name) and `FundingPoint` (rate, timestamp). These are adapter-internal; orchestrator converts to SQLModel entities.
+Exchange DTO: `ExchangeContractListing` (asset_name, quote_name, funding_interval, section_name) and `FundingPoint` (rate, timestamp). These are adapter-internal; orchestrator converts to SQLModel entities.
 
 Registry in `exchanges/__init__.py`: `EXCHANGES` dict built at import time with validation.
 
 ## Database access
 
-Uses SQLAlchemy `async_sessionmaker` directly. Session factory is stored as `_db: SessionFactory` and accessed exclusively via `self._db.begin()` (never bare `self._db()`). `.begin()` provides auto-commit on success, auto-rollback on exception. For read-only operations this has zero cost — COMMIT on a clean session is a no-op at the DBAPI level.
+Uses SQLAlchemy `async_sessionmaker` directly. Open explicit transaction scopes with `.begin()` for writes, read+write units that must be atomic, and multi-step operations whose changes must commit or roll back together. Plain `session_factory()` is fine for short read-only operations.
 
-Rule: any `select`/`insert`/`text()` goes into query functions in `db/`. Direct session methods (`merge`, `add`) stay inline in business code.
+Rule: any `select`/`insert`/`update`/`delete`/`text()` goes into query functions. Direct session methods (`merge`, `add`) and small lifecycle ORM mutations stay inline in business code when they operate on already loaded rows.
 
-Sessions are short-lived — opened and closed per DB operation to avoid holding connections during API calls.
+Tracker business logic uses SQLModel ORM rows as scalar data carriers for persisted rows. Shared models intentionally have no ORM relationships, so cross-row composition is represented by explicit query projections such as `ContractWithHistoryState`, never by implicit `contract.history_state` or `asset.contracts` access.
+
+ORM rows may be used after their loading session closes only as carriers of already loaded scalar fields. Tracker sessions must use `expire_on_commit=False`; enabling expiration would make detached scalar reads unsafe.
+
+Sessions are short-lived — opened and closed per DB operation to avoid holding connections or transactions during exchange API calls.
+
+Historical sync progress is stored in `ContractHistoryState`, not derived from
+`historical_funding_point` in the hot path. Each contract has exactly one state
+row. The tracker updates funding points and the state bounds in the same
+transaction, so crash recovery repeats the last window safely via conflict-ignored inserts.
 
 ## Configuration
 

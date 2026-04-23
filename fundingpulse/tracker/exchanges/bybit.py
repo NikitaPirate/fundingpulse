@@ -13,7 +13,7 @@ from typing import Any
 from fundingpulse.models.contract import Contract
 from fundingpulse.time import from_unix_milliseconds, utc_now
 from fundingpulse.tracker.exchanges.base import BaseExchange
-from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
+from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +31,9 @@ class BybitExchange(BaseExchange):
 
     def _format_symbol(self, contract: Contract) -> str:
         suffix = self._SUFFIXES.get(contract.quote_name, contract.quote_name)
-        return f"{contract.asset.name}{suffix}"
+        return f"{contract.asset_name}{suffix}"
 
-    async def get_contracts(self) -> list[ContractInfo]:
+    async def get_contracts(self) -> list[ExchangeContractListing]:
         all_contracts = []
         cursor = None
 
@@ -56,9 +56,9 @@ class BybitExchange(BaseExchange):
         for contract in all_contracts:
             if contract["contractType"] == "LinearPerpetual":
                 contracts.append(
-                    ContractInfo(
+                    ExchangeContractListing(
                         asset_name=contract["baseCoin"],
-                        quote=contract["quoteCoin"],
+                        quote_name=contract["quoteCoin"],
                         funding_interval=int(contract["fundingInterval"] / 60),
                         section_name=self.EXCHANGE_ID,
                     )

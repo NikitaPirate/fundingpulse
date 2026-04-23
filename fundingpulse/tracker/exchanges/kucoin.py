@@ -9,7 +9,7 @@ import logging
 from fundingpulse.models.contract import Contract
 from fundingpulse.time import from_unix_milliseconds, utc_now
 from fundingpulse.tracker.exchanges.base import BaseExchange
-from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
+from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 
 logger = logging.getLogger(__name__)
 
@@ -24,9 +24,9 @@ class KucoinExchange(BaseExchange):
     _FETCH_STEP = 100
 
     def _format_symbol(self, contract: Contract) -> str:
-        return f"{contract.asset.name}{contract.quote_name}M"
+        return f"{contract.asset_name}{contract.quote_name}M"
 
-    async def get_contracts(self) -> list[ContractInfo]:
+    async def get_contracts(self) -> list[ExchangeContractListing]:
         response = await self._api_get(f"{self.API_ENDPOINT}/api/v1/contracts/active")
 
         assert isinstance(response, dict)
@@ -51,9 +51,9 @@ class KucoinExchange(BaseExchange):
             funding_interval = int(funding_interval_ms / 1000 / 3600)
 
             contracts.append(
-                ContractInfo(
+                ExchangeContractListing(
                     asset_name=asset_name,
-                    quote=quote,
+                    quote_name=quote,
                     funding_interval=funding_interval,
                     section_name=self.EXCHANGE_ID,
                 )

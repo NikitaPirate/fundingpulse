@@ -6,9 +6,9 @@ from fundingpulse.time import UtcDateTime
 
 
 @dataclass
-class ContractInfo:
+class ExchangeContractListing:
     asset_name: str
-    quote: str
+    quote_name: str
     funding_interval: int  # hours between funding payments
     section_name: str
 

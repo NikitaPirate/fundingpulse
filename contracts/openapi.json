@@ -168,10 +168,6 @@
             "additionalProperties": true,
             "title": "Special Fields",
             "type": "object"
-          },
-          "synced": {
-            "title": "Synced",
-            "type": "boolean"
           }
         },
         "required": [
@@ -180,7 +176,6 @@
           "section_name",
           "quote_name",
           "funding_interval",
-          "synced",
           "special_fields",
           "deprecated"
         ],

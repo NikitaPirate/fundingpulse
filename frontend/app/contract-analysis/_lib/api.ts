@@ -51,7 +51,6 @@ function mapContractMeta(response: ContractMetaResponse): ContractMeta {
     sectionName: response.data.section_name,
     quoteName: response.data.quote_name,
     fundingInterval: response.data.funding_interval,
-    synced: response.data.synced,
     deprecated: response.data.deprecated,
   };
 }

@@ -12,7 +12,7 @@ from typing import Any
 from fundingpulse.models.contract import Contract
 from fundingpulse.time import from_unix_milliseconds, utc_now
 from fundingpulse.tracker.exchanges.base import BaseExchange
-from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
+from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +27,9 @@ class BinanceUsdmExchange(BaseExchange):
     _FETCH_STEP = 1000
 
     def _format_symbol(self, contract: Contract) -> str:
-        return f"{contract.asset.name}{contract.quote_name}"
+        return f"{contract.asset_name}{contract.quote_name}"
 
-    async def get_contracts(self) -> list[ContractInfo]:
+    async def get_contracts(self) -> list[ExchangeContractListing]:
         exchange_response: Any
         funding_response: Any
         exchange_response, funding_response = await asyncio.gather(
@@ -47,9 +47,9 @@ class BinanceUsdmExchange(BaseExchange):
                 funding_interval = funding_intervals.get(instrument["pair"], 8)
 
                 contracts.append(
-                    ContractInfo(
+                    ExchangeContractListing(
                         asset_name=instrument["baseAsset"],
-                        quote=instrument["quoteAsset"],
+                        quote_name=instrument["quoteAsset"],
                         funding_interval=funding_interval,
                         section_name=self.EXCHANGE_ID,
                     )

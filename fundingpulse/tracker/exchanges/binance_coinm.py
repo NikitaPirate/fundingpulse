@@ -10,7 +10,7 @@ from typing import Any
 from fundingpulse.models.contract import Contract
 from fundingpulse.time import from_unix_milliseconds, utc_now
 from fundingpulse.tracker.exchanges.base import BaseExchange
-from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
+from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 
 logger = logging.getLogger(__name__)
 
@@ -25,18 +25,18 @@ class BinanceCoinmExchange(BaseExchange):
     _FETCH_STEP = 8000
 
     def _format_symbol(self, contract: Contract) -> str:
-        return f"{contract.asset.name}{contract.quote_name}_PERP"
+        return f"{contract.asset_name}{contract.quote_name}_PERP"
 
-    async def get_contracts(self) -> list[ContractInfo]:
+    async def get_contracts(self) -> list[ExchangeContractListing]:
         response: Any = await self._api_get(f"{self.API_ENDPOINT}/v1/exchangeInfo")
 
         contracts = []
         for instrument in response["symbols"]:
             if instrument["contractType"] == "PERPETUAL":
                 contracts.append(
-                    ContractInfo(
+                    ExchangeContractListing(
                         asset_name=instrument["baseAsset"],
-                        quote=instrument["quoteAsset"],
+                        quote_name=instrument["quoteAsset"],
                         funding_interval=8,
                         section_name=self.EXCHANGE_ID,
                     )

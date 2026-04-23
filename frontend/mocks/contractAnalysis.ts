@@ -84,7 +84,6 @@ export function buildContractMetaFixture(contractId: string): ContractMetaRespon
       quote_name: contract.quoteName,
       funding_interval: contract.fundingInterval,
       special_fields: {},
-      synced: true,
       deprecated: false,
     },
     meta: null,

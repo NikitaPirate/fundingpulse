@@ -10,6 +10,7 @@ from alembic import context
 from fundingpulse.models import (  # noqa: F401
     Asset,
     Contract,
+    ContractHistoryState,
     HistoricalFundingPoint,
     LiveFundingPoint,
     Quote,

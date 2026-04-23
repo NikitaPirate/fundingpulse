@@ -66,7 +66,6 @@ async def get_contract_by_id(session: AsyncSession, contract_id: UUID) -> Contra
         section_name=contract.section_name,
         quote_name=contract.quote_name,
         funding_interval=contract.funding_interval,
-        synced=contract.synced,
         special_fields=contract.special_fields,
         deprecated=contract.deprecated,
     )

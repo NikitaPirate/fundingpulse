@@ -8,6 +8,7 @@ Shared SQLModel models used by both tracker and API services.
 Asset (PK: name)  ──┐
 Quote (PK: name)  ──┼──> Contract (PK: uuid, UNIQUE: asset_name+section_name+quote_name)
 Section (PK: name) ─┘       │
+                            ├──> ContractHistoryState (PK/FK: contract_id)
                             ├──> HistoricalFundingPoint (PK: contract_id+timestamp, hypertable)
                             └──> LiveFundingPoint       (PK: contract_id+timestamp, hypertable)
 ```
@@ -20,13 +21,15 @@ Section (PK: name) ─┘       │
 
 ## Models
 
-**Asset** — crypto asset. `name` (PK), optional `market_cap_rank` (indexed). Has contracts relationship.
+**Asset** — crypto asset. `name` (PK), optional `market_cap_rank` (indexed). No ORM relationships; join/query explicitly when contracts are needed.
 
-**Section** — exchange identity. `name` (PK), `special_fields` (JSON). Has contracts relationship.
+**Section** — exchange identity. `name` (PK), `special_fields` (JSON). No ORM relationships; join/query explicitly when contracts are needed.
 
 **Quote** — quote currency. `name` (PK) only.
 
-**Contract** — the central linking entity. Fields: `asset_name`, `section_name`, `quote_name`, `funding_interval` (hours), `synced` (bool — history fully backfilled), `special_fields` (JSON), `deprecated` (bool — no longer listed by exchange). Eagerly loads asset and section via `selectin`.
+**Contract** — the central linking entity. Fields: `asset_name`, `section_name`, `quote_name`, `funding_interval` (hours), `special_fields` (JSON), `deprecated` (bool — no longer listed by exchange). Holds FK names only; it intentionally has no ORM relationships to asset, section, or history state.
+
+**ContractHistoryState** — tracker-owned historical ingestion checkpoint. One row per contract. Fields: `contract_id`, `history_synced` (bool — historical backfill completed), `oldest_timestamp`, `newest_timestamp`, `updated_at`. No ORM relationship back to `Contract`; query explicitly by `contract_id`. Invariant: `history_synced=True` requires both timestamp bounds to be present.
 
 **HistoricalFundingPoint** / **LiveFundingPoint** — identical structure, separate tables. Both are TimescaleDB hypertables partitioned by `timestamp`. Composite PK: (contract_id, timestamp).
 
@@ -36,8 +39,9 @@ Hypertable declaration is in model `__table_args__` via `timescaledb_hypertable`
 
 ## Migrations
 
-Alembic in `fundingpulse/migrations/`. Numbered `001_` through `006_`. Key migrations:
+Alembic in `fundingpulse/migrations/`. Numbered `001_` through `007_`. Key migrations:
 - `001` — initial tables and hypertables
 - `004` — continuous aggregates (lfp_smart)
 - `005` — smart view for live data
 - `006` — contract search materialized view
+- `007` — contract history state checkpoint table

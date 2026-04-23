@@ -4,12 +4,13 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from typing import Any
+from uuid import UUID
 
 from httpx import HTTPError
 
 from fundingpulse.models.contract import Contract
 from fundingpulse.time import UtcDateTime, to_unix_milliseconds, utc_now
-from fundingpulse.tracker.exchanges.dto import ContractInfo, FundingPoint
+from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 from fundingpulse.tracker.infrastructure import http_client
 
 
@@ -78,11 +79,11 @@ class BaseExchange(ABC):
 
     @abstractmethod
     def _format_symbol(self, contract: Contract) -> str:
-        """Format exchange-specific symbol from Contract."""
+        """Format exchange-specific symbol from a contract row."""
         ...
 
     @abstractmethod
-    async def get_contracts(self) -> list[ContractInfo]:
+    async def get_contracts(self) -> list[ExchangeContractListing]:
         """Fetch all perpetual contracts from exchange."""
         ...
 
@@ -125,7 +126,7 @@ class BaseExchange(ABC):
         end_ms = to_unix_milliseconds(utc_now())
         return await self._fetch_history(contract, start_ms, end_ms)
 
-    async def fetch_live(self, contracts: list[Contract]) -> dict[Contract, FundingPoint]:
+    async def fetch_live(self, contracts: list[Contract]) -> dict[UUID, FundingPoint]:
         """Fetch unsettled rates for given contracts.
 
         Default implementation calls _fetch_live_batch() and maps results
@@ -135,7 +136,7 @@ class BaseExchange(ABC):
         symbol_to_contract = {self._format_symbol(c): c for c in contracts}
         all_rates = await self._fetch_live_batch()
         return {
-            symbol_to_contract[symbol]: rate
+            symbol_to_contract[symbol].id: rate
             for symbol, rate in all_rates.items()
             if symbol in symbol_to_contract
         }
@@ -159,9 +160,7 @@ class BaseExchange(ABC):
         """
         raise NotImplementedError
 
-    async def _fetch_live_parallel(
-        self, contracts: list[Contract]
-    ) -> dict[Contract, FundingPoint]:
+    async def _fetch_live_parallel(self, contracts: list[Contract]) -> dict[UUID, FundingPoint]:
         """Fetch live rates via parallel per-contract requests.
 
         For exchanges without batch API. Calls _fetch_live_single() for each
@@ -174,12 +173,12 @@ class BaseExchange(ABC):
                 return await self._fetch_live_single(contract)
             except HTTPError as e:
                 self.logger_live.warning(
-                    f"Failed to fetch live rate for {contract.asset.name}: {e}"
+                    f"Failed to fetch live rate for {contract.asset_name}: {e}"
                 )
                 return None
             except ValueError as e:
                 self.logger_live.warning(
-                    f"Invalid funding rate data for {contract.asset.name}: {e}"
+                    f"Invalid funding rate data for {contract.asset_name}: {e}"
                 )
                 return None
 
@@ -187,7 +186,7 @@ class BaseExchange(ABC):
         results = await asyncio.gather(*tasks)
 
         return {
-            contract: result
+            contract.id: result
             for contract, result in zip(contracts, results, strict=True)
             if result is not None
         }

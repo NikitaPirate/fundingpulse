@@ -114,7 +114,12 @@ class FundingQueryComposer:
 
         max_interval_column = ""
         if include_max_interval:
-            max_interval_column = ",\n                GREATEST(contract1.funding_interval, contract2.funding_interval) as max_interval_hours"
+            max_interval_column = """
+                ,
+                GREATEST(
+                    contract1.funding_interval,
+                    contract2.funding_interval
+                ) as max_interval_hours"""
 
         return f"""
         contract_pairs AS (
@@ -219,8 +224,14 @@ class FundingQueryComposer:
         distinct_windows AS (
             SELECT DISTINCT
                 max_interval_hours,
-                time_bucket(make_interval(hours => max_interval_hours), :from_time) AS aligned_from,
-                time_bucket(make_interval(hours => max_interval_hours), :to_time) AS aligned_to
+                time_bucket(
+                    make_interval(hours => max_interval_hours),
+                    :from_time
+                ) AS aligned_from,
+                time_bucket(
+                    make_interval(hours => max_interval_hours),
+                    :to_time
+                ) AS aligned_to
             FROM contract_pairs
         ),
 
@@ -232,10 +243,16 @@ class FundingQueryComposer:
                 SUM(funding_records.funding_rate) AS total_funding
             FROM distinct_windows
             JOIN historical_funding_point funding_records ON
-                funding_records.timestamp >= (distinct_windows.aligned_from - make_interval(mins => :buffer_minutes))
+                funding_records.timestamp >= (
+                    distinct_windows.aligned_from
+                    - make_interval(mins => :buffer_minutes)
+                )
                 AND funding_records.timestamp < distinct_windows.aligned_to
                 AND funding_records.contract_id IN (SELECT contract_id FROM filtered_contracts)
-            GROUP BY distinct_windows.aligned_from, distinct_windows.aligned_to, funding_records.contract_id
+            GROUP BY
+                distinct_windows.aligned_from,
+                distinct_windows.aligned_to,
+                funding_records.contract_id
         ),
 
         comparison_results AS (
@@ -249,12 +266,19 @@ class FundingQueryComposer:
                 contract_pairs.contract_2_section AS contract_2_section,
                 contract_pairs.contract_2_quote AS contract_2_quote,
                 COALESCE(contract2_funding.total_funding, 0) AS contract_2_total_funding,
-                (COALESCE(contract1_funding.total_funding, 0) - COALESCE(contract2_funding.total_funding, 0)) AS difference,
-                ABS(COALESCE(contract1_funding.total_funding, 0) - COALESCE(contract2_funding.total_funding, 0)) AS abs_difference,
+                (
+                    COALESCE(contract1_funding.total_funding, 0)
+                    - COALESCE(contract2_funding.total_funding, 0)
+                ) AS difference,
+                ABS(
+                    COALESCE(contract1_funding.total_funding, 0)
+                    - COALESCE(contract2_funding.total_funding, 0)
+                ) AS abs_difference,
                 EXTRACT(EPOCH FROM aligned_windows.aligned_from)::bigint AS aligned_from,
                 EXTRACT(EPOCH FROM aligned_windows.aligned_to)::bigint AS aligned_to
             FROM contract_pairs
-            JOIN distinct_windows aligned_windows ON contract_pairs.max_interval_hours = aligned_windows.max_interval_hours
+            JOIN distinct_windows aligned_windows ON
+                contract_pairs.max_interval_hours = aligned_windows.max_interval_hours
             LEFT JOIN funding_in_window contract1_funding ON
                 contract_pairs.contract_1_id = contract1_funding.contract_id
                 AND aligned_windows.aligned_from = contract1_funding.aligned_from
@@ -420,7 +444,12 @@ class FundingQueryComposer:
             JOIN historical_funding_point hfp ON fc.contract_id = hfp.contract_id
             WHERE hfp.timestamp >= :start_date
               AND hfp.timestamp <= :end_date
-            GROUP BY fc.contract_id, fc.asset_name, fc.quote_name, fc.section_name, fc.funding_interval
+            GROUP BY
+                fc.contract_id,
+                fc.asset_name,
+                fc.quote_name,
+                fc.section_name,
+                fc.funding_interval
         ),
 
         contracts_with_normalized_rates AS (
@@ -448,8 +477,14 @@ class FundingQueryComposer:
                 cp.contract_2_section,
                 cp.contract_2_quote,
                 COALESCE(c2.normalized_avg_rate, 0) AS contract_2_total_funding,
-                (COALESCE(c1.normalized_avg_rate, 0) - COALESCE(c2.normalized_avg_rate, 0)) AS difference,
-                ABS(COALESCE(c1.normalized_avg_rate, 0) - COALESCE(c2.normalized_avg_rate, 0)) AS abs_difference,
+                (
+                    COALESCE(c1.normalized_avg_rate, 0)
+                    - COALESCE(c2.normalized_avg_rate, 0)
+                ) AS difference,
+                ABS(
+                    COALESCE(c1.normalized_avg_rate, 0)
+                    - COALESCE(c2.normalized_avg_rate, 0)
+                ) AS abs_difference,
                 :from_ts as aligned_from,
                 :to_ts as aligned_to
             FROM contract_pairs cp

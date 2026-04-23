@@ -3,6 +3,7 @@
 from fundingpulse.models.asset import Asset
 from fundingpulse.models.base import BaseFundingPoint, NameModel, UUIDModel
 from fundingpulse.models.contract import Contract
+from fundingpulse.models.contract_history_state import ContractHistoryState
 from fundingpulse.models.historical_funding_point import HistoricalFundingPoint
 from fundingpulse.models.live_funding_point import LiveFundingPoint
 from fundingpulse.models.quote import Quote
@@ -18,6 +19,7 @@ __all__ = [
     "Section",
     "Quote",
     "Contract",
+    "ContractHistoryState",
     "HistoricalFundingPoint",
     "LiveFundingPoint",
 ]
