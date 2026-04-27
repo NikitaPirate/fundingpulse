@@ -55,10 +55,6 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "testcontainers[postgres]>=4.10.0",
 ]
-docs = [
-    "mkdocs-material>=9.6",
-]
-
 [tool.pytest.ini_options]
 pythonpath = "."
 
