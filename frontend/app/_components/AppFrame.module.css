@@ -1,9 +1,18 @@
 .shell {
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
 }
 
+.chrome {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: var(--z-nav);
+}
+
 .main {
-  padding: calc(var(--nav-height) + var(--space-sm)) var(--space-sm) var(--space-sm);
+  flex: 1 0 auto;
+  padding: calc(var(--app-chrome-height) + var(--space-sm)) var(--space-sm) var(--space-sm);
 }
 
 .mainInner {
@@ -13,6 +22,6 @@
 
 @media (max-width: 800px) {
   .main {
-    padding: calc(var(--nav-height) + var(--space-xs)) var(--space-xs) var(--space-xs);
+    padding: calc(var(--app-chrome-height) + var(--space-xs)) var(--space-xs) var(--space-xs);
   }
 }

@@ -21,8 +21,24 @@
   --shadow-strong: 0 24px 64px rgba(4, 9, 18, 0.18);
   --page-max-width: 128rem;
   --nav-height: 4rem;
+  --portfolio-banner-height: 2.85rem;
+  --app-chrome-height: calc(var(--portfolio-banner-height) + var(--nav-height));
   --z-base: 1;
   --z-nav: 20;
+}
+
+@media (max-width: 980px) {
+  :root {
+    --portfolio-banner-height: 2.85rem;
+    --app-chrome-height: 8.75rem;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --portfolio-banner-height: 5.2rem;
+    --app-chrome-height: 11.15rem;
+  }
 }
 
 html {

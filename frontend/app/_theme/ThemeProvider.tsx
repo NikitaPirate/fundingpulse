@@ -3,9 +3,10 @@
 import {
   createContext,
   type ReactNode,
+  useCallback,
   useContext,
-  useEffect,
-  useState,
+  useMemo,
+  useSyncExternalStore,
 } from "react";
 
 type Theme = "light" | "dark";
@@ -17,8 +18,13 @@ type ThemeContextValue = {
 };
 
 const STORAGE_KEY = "fundingpulse-theme";
+const THEME_CHANGE_EVENT = "fundingpulse-theme-change";
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
+
+function isTheme(value: string | undefined): value is Theme {
+  return value === "light" || value === "dark";
+}
 
 function getPreferredTheme(): Theme {
   if (typeof window === "undefined") {
@@ -33,34 +39,64 @@ function getPreferredTheme(): Theme {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
+function getThemeSnapshot(): Theme {
+  const documentTheme = document.documentElement.dataset.theme;
+  return isTheme(documentTheme) ? documentTheme : getPreferredTheme();
+}
+
+function getServerThemeSnapshot(): Theme {
+  return "dark";
+}
+
+function subscribeToThemeChange(onStoreChange: () => void) {
+  function handleStorageChange(event: StorageEvent) {
+    if (event.key === STORAGE_KEY) {
+      onStoreChange();
+    }
+  }
+
+  window.addEventListener(THEME_CHANGE_EVENT, onStoreChange);
+  window.addEventListener("storage", handleStorageChange);
+
+  return () => {
+    window.removeEventListener(THEME_CHANGE_EVENT, onStoreChange);
+    window.removeEventListener("storage", handleStorageChange);
+  };
+}
+
+function writeTheme(theme: Theme) {
+  document.documentElement.dataset.theme = theme;
+  window.localStorage.setItem(STORAGE_KEY, theme);
+  window.dispatchEvent(new Event(THEME_CHANGE_EVENT));
+}
+
 type ThemeProviderProps = {
   children: ReactNode;
 };
 
 export function ThemeProvider({ children }: ThemeProviderProps) {
-  const [resolvedTheme, setResolvedTheme] = useState<Theme>(() => {
-    if (typeof document !== "undefined") {
-      const documentTheme = document.documentElement.dataset.theme;
-      if (documentTheme === "light" || documentTheme === "dark") {
-        return documentTheme;
-      }
-    }
+  const resolvedTheme = useSyncExternalStore(
+    subscribeToThemeChange,
+    getThemeSnapshot,
+    getServerThemeSnapshot,
+  );
 
-    return getPreferredTheme();
-  });
+  const setTheme = useCallback((theme: Theme) => {
+    writeTheme(theme);
+  }, []);
 
-  useEffect(() => {
-    document.documentElement.dataset.theme = resolvedTheme;
-    window.localStorage.setItem(STORAGE_KEY, resolvedTheme);
-  }, [resolvedTheme]);
+  const toggleTheme = useCallback(() => {
+    writeTheme(getThemeSnapshot() === "dark" ? "light" : "dark");
+  }, []);
 
-  const value: ThemeContextValue = {
-    resolvedTheme,
-    setTheme: setResolvedTheme,
-    toggleTheme: () => {
-      setResolvedTheme((currentTheme) => (currentTheme === "dark" ? "light" : "dark"));
-    },
-  };
+  const value: ThemeContextValue = useMemo(
+    () => ({
+      resolvedTheme,
+      setTheme,
+      toggleTheme,
+    }),
+    [resolvedTheme, setTheme, toggleTheme],
+  );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

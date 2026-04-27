@@ -2,7 +2,7 @@
   display: grid;
   grid-template-rows: auto 1fr;
   gap: var(--space-sm);
-  min-height: calc(100vh - var(--nav-height) - (var(--space-sm) * 2));
+  min-height: calc(100vh - var(--app-chrome-height) - (var(--space-sm) * 2));
 }
 
 .header {
