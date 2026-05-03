@@ -31,12 +31,20 @@ class _HttpClient:
     def __init__(self) -> None:
         self._client: httpx.AsyncClient | None = None
 
-    async def startup(self) -> None:
+    async def startup(self, *, max_connections: int = 100) -> None:
         """Create shared httpx client. Call once at application startup."""
         if self._client is not None:
             raise RuntimeError("HTTP client already started")
-        self._client = httpx.AsyncClient(timeout=30.0)
-        logger.info("HTTP client started")
+        if max_connections < 1:
+            raise ValueError("max_connections must be greater than 0")
+
+        # Bugfix hot path: keep the shared process-wide client, but give it
+        # enough active connection slots for all exchanges assigned to the
+        # process. Replace with per-exchange clients/limits when tracker HTTP
+        # concurrency is redesigned.
+        limits = httpx.Limits(max_connections=max_connections)
+        self._client = httpx.AsyncClient(timeout=30.0, limits=limits)
+        logger.info("HTTP client started (max_connections=%s)", max_connections)
 
     async def shutdown(self) -> None:
         """Close shared httpx client. Safe to call if already closed."""

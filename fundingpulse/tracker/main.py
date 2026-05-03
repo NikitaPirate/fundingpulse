@@ -21,6 +21,8 @@ from fundingpulse.tracker.settings import build_settings
 
 logger = logging.getLogger(__name__)
 
+HTTP_CONNECTIONS_PER_EXCHANGE = 100
+
 
 async def run_scheduler(
     db: DBRuntimeConfig,
@@ -28,7 +30,7 @@ async def run_scheduler(
 ) -> None:
     """Bootstrap and run scheduler forever."""
     async with db_session_factory_scope(db) as session_factory:
-        await http_client.startup()
+        await http_client.startup(max_connections=_http_max_connections_for_exchanges(exchanges))
         try:
             scheduler = await bootstrap(
                 session_factory=session_factory,
@@ -39,6 +41,11 @@ async def run_scheduler(
             await asyncio.Event().wait()
         finally:
             await http_client.shutdown()
+
+
+def _http_max_connections_for_exchanges(exchanges: list[str] | None) -> int:
+    exchange_count = len(EXCHANGES) if exchanges is None else len(exchanges)
+    return max(1, exchange_count) * HTTP_CONNECTIONS_PER_EXCHANGE
 
 
 def main() -> None:
