@@ -2,17 +2,25 @@
 
 ## Goal
 
-Move live funding collection out of the tracker scheduler into a dedicated pull-based ingestion pipeline.
+Start the migration from the current monolithic tracker into an ingestion/data-pipeline architecture.
+
+Live funding is the first pipeline because it has the smallest useful boundary: minute cadence, existing `live_funding_point` storage, no contract registration ownership, and no historical sync checkpoint ownership.
 
 The pipeline should collect live funding snapshots for all enabled exchanges, write them to the existing `live_funding_point` table, and emit structured logs that make the service understandable in production.
+
+This is not a standalone live subsystem. It is the first step toward moving tracker responsibilities into ingestion piece by piece. The existing tracker is the source of current behavior; implementation agents should inspect `fundingpulse/tracker/` when they need exact exchange selection, DB runtime, adapter, persistence, or deployment context.
 
 ## Non-Goals
 
 This design does not introduce Kafka, Bronze/Silver/Gold layers, a distributed workflow engine, or per-exchange static worker assignments.
 
+It does not migrate the whole tracker in one step. Historical update, contract registration, materialized view refresh, and auxiliary tracker jobs stay in the existing tracker until their own migration phases.
+
 It does not duplicate live collection alongside the existing tracker live job. The tracker live job is disabled when the new live ingestion pipeline is enabled.
 
 ## Code Ownership
+
+Common ingestion code lives under `fundingpulse/ingestion/`.
 
 The live ingestion implementation lives under `fundingpulse/ingestion/live/`.
 
@@ -21,6 +29,10 @@ Exchange-specific ingestion code lives under `fundingpulse/ingestion/exchanges/`
 Ingestion exchange adapters are separate from tracker exchange adapters. They should be designed for the ingestion layer's contracts instead of copying the tracker adapter interface wholesale.
 
 The initial live ingestion adapter surface should include only what live ingestion needs.
+
+Common ingestion code owns scheduler wiring, enqueuer registration, queue primitives, task lifecycle transitions, and shared settings. Live-specific code owns live scheduling policy, live task execution, live exchange adapter contracts, and `live_funding_point` persistence.
+
+Ingestion-owned settings use the `FI_*` namespace and follow the repository's existing settings layout rules.
 
 ## Runtime Topology
 
@@ -46,7 +58,7 @@ N universal live workers
 
 Workers are universal. A worker can process a task for any enabled exchange.
 
-Enabled exchanges come from the existing tracker exchange selection configuration, `FT_EXCHANGES`.
+Enabled exchanges initially follow the existing tracker exchange selection semantics, `FT_EXCHANGES`. The parser/resolver should be shared or extracted so ingestion does not import tracker runtime code just to select exchanges.
 
 The scheduler process is intentionally thin. It owns periodic invocation, but it does not fetch exchange data and does not contain task creation semantics beyond calling registered enqueuer jobs.
 
@@ -54,7 +66,7 @@ APScheduler is the initial runtime inside the scheduler process. This is not a h
 
 ## Enqueuer Jobs
 
-An enqueuer job is a bounded scheduling use-case for one ingestion pipeline.
+An enqueuer job is a bounded scheduling use-case for one ingestion pipeline. The enqueuer contract is part of the common ingestion foundation; live funding is only the first registered implementation.
 
 Each enqueuer job:
 
@@ -79,9 +91,11 @@ live funding enqueuer job
 
 The live funding enqueuer job must be bounded by a hard timeout, default 45 seconds. It must finish successfully or fail within that timeout.
 
+For live funding, `scheduled_for` is the current UTC minute bucket with seconds and microseconds set to zero.
+
 The live funding enqueuer job must be safe to run more than once for the same scheduled interval. If two invocations attempt to create the same task, the task idempotency key ensures that only one task is created and the duplicate creation becomes a no-op.
 
-The live funding enqueuer job does not fully trust workers to finalize tasks. Each tick marks stale `running` live tasks as `failed` before scheduling current work. The stale threshold should be slightly larger than the worker hard timeout. This is recovery, not retry.
+The live funding enqueuer job does not fully trust workers to finalize tasks. Each tick marks stale `running` live tasks as `failed` before scheduling current work. The stale threshold should be derived from the worker hard timeout, initially `task_timeout + 15 seconds`. This is recovery, not retry.
 
 ## Enqueuer And Worker Boundary
 
@@ -106,6 +120,7 @@ One task represents one live funding snapshot for one exchange and one scheduled
 
 ```text
 LiveFundingSnapshotTask
+  pipeline = "live_funding"
   exchange = "bybit"
   scheduled_for = "2026-05-08T12:34:00Z"
 ```
@@ -127,8 +142,10 @@ Live ingestion follows these scheduling rules:
 - Live ingestion follows a fixed schedule.
 - A failed execution does not change the schedule.
 - Live data is not backfilled. The system does not create or preserve backlog for missed live intervals.
-- If a scheduled execution would overlap with an already running execution for the same exchange, the scheduled execution is skipped.
+- If a scheduled execution would overlap with active work for the same exchange, the scheduled execution is skipped.
 - The next scheduled execution is created according to the original schedule, regardless of previous success, failure, or skip.
+
+For live funding, active work means an existing `pending` or `running` task for the same pipeline and exchange.
 
 ## Worker Execution Model
 
@@ -172,19 +189,19 @@ The initial task shape:
 
 ```text
 ingestion_task
-  id
-  pipeline
-  task_key
-  exchange_name
-  scheduled_for
-  payload
-  status
-  created_at
-  claimed_at
-  finished_at
-  worker_id
-  error_type
-  error_message
+  id uuid primary key default gen_random_uuid()
+  pipeline text not null
+  task_key text not null unique
+  exchange_name text not null
+  scheduled_for timestamptz not null
+  payload jsonb not null default '{}'
+  status text not null
+  created_at timestamptz not null default now()
+  claimed_at timestamptz null
+  finished_at timestamptz null
+  worker_id text null
+  error_type text null
+  error_message text null
 ```
 
 `exchange_name` and `scheduled_for` are first-class fields because live scheduling and routing depend on them. Both are required for the initial live ingestion pipeline.
@@ -198,6 +215,18 @@ live_funding_snapshot:{exchange}:{scheduled_for}
 ```
 
 The database does not enforce live scheduling policy. It should not contain a live-specific uniqueness constraint such as "only one active task per exchange". That invariant belongs to the live funding enqueuer job.
+
+`status` should be stored as text with a check constraint, not as a Postgres enum. Initial statuses are `pending`, `running`, `done`, and `failed`.
+
+Initial indexes:
+
+```text
+(pipeline, status, created_at)       claim path
+(pipeline, exchange_name, status)    active-work checks
+(pipeline, scheduled_for)            scheduling/debug/test queries
+```
+
+The corresponding SQLModel should be exported from `fundingpulse.models`, and the migration should be the next sequential migration, currently `009_ingestion_task.py`.
 
 ## Queue Semantics
 
@@ -273,49 +302,56 @@ Live funding writes remain idempotent. `live_funding_point` continues to use con
 
 ## Cutover From Tracker
 
-The new live ingestion pipeline replaces the tracker live job.
+The new live ingestion pipeline replaces only the tracker live job.
 
 The initial cutover is direct: the same deployment that starts live ingestion also disables the existing tracker live job. There is no production shadow mode and no per-exchange live cutover flag in v0.
 
 Historical update, contract registration, materialized view refresh, and other tracker jobs remain unchanged.
 
+This is a temporary mixed architecture: live runs through ingestion, while the rest of tracker still runs through the existing tracker scheduler. Later phases should move those remaining tracker responsibilities into ingestion with their own pipeline-specific scheduling and task boundaries.
+
 ## Testing Strategy
 
-Tests should focus on behavior boundaries and design invariants before implementation details.
+Tests should focus on behavior boundaries and design invariants, not implementation details. For new ingestion code, first establish the production boundary, then add focused tests for the observable behavior that boundary promises.
 
 The first test layer should cover the live funding enqueuer job and scheduling invariant: idempotent task creation for one scheduled interval, no backlog/catch-up behavior, and skipped scheduling when an exchange already has active work.
 
 The second test layer should cover worker execution boundaries: a claimed task is executed even when `scheduled_for` is in the past, live writes remain idempotent, failures are recorded, and required structured log events are emitted.
 
+Tests should not verify APScheduler, SQLAlchemy, Postgres locking, or httpx behavior as third-party contracts. Verify how FundingPulse uses those tools: task creation idempotency, lifecycle transitions, exchange selection behavior, and emitted structured lifecycle events.
+
 ## Implementation Roadmap
 
-1. **Ingestion Vertical Skeleton**
+Implementation phases should be scoped by behavioral boundary and approximate size. Target around 500 changed lines per phase. High-risk or design-heavy phases can be smaller, around 250 lines. Mechanical or generic phases can be larger, up to around 1000 lines, when the boundary is already clear.
 
-   Build the top-level shape first: `ingestion_task`, `fundingpulse/ingestion/live/`, the ingestion scheduler shell, the live funding enqueuer job, a live worker with no-op or fake execution, task lifecycle, and structured log skeleton. This phase should prove the core scheduling and worker boundaries before real exchange code is added.
+0. **Preflight Extraction And DRY Review**
 
-2. **Real Live Execution**
+   Review existing tracker code before adding ingestion code. Extract only shared pieces ingestion needs immediately, such as exchange selection parsing, DB runtime config helpers, or logging helpers. Do not perform speculative abstractions.
 
-   Replace fake execution with live execution: load active contracts, fetch live rates through the ingestion exchange boundary, persist `LiveFundingPoint` records with conflict-ignored inserts, and record execution outcome through structured logs.
+1. **Ingestion Contracts And Schema**
 
-3. **Adapter Parity**
+   Define the shape before implementing runtime behavior: package boundaries, `ingestion_task` migration/model, task status constants, pipeline constants, task identity helpers, enqueuer protocol, worker/executor protocol, settings surface, and structured log event names/fields. Do not implement scheduler runtime, worker loops, queue claiming, live fetching, or persistence logic in this phase.
 
-   Port live exchange behavior into `fundingpulse/ingestion/exchanges/` until the new pipeline covers the exchanges selected by `FT_EXCHANGES`.
+2. **Common Queue Primitives**
 
-4. **Runtime And Cutover**
+   Implement the Postgres task lifecycle behind the phase-1 contracts: idempotent create, active-work checks, stale-running recovery, claim, complete, and fail. Keep it pipeline-aware but not live-specific beyond fields required by the current schema.
+
+3. **Scheduler And Live Enqueuer**
+
+   Implement the common scheduler shell, enqueuer registration, and live funding enqueuer. This phase proves minute-bucket scheduling, idempotent enqueue, no-backlog behavior, active-work skips, stale-running recovery, and enqueue lifecycle logs. It does not claim or execute tasks.
+
+4. **Live Worker Skeleton**
+
+   Implement the live worker entrypoint and one-task-at-a-time worker loop with a no-op executor. This phase proves claim -> execute -> complete/fail boundaries, worker timeout behavior, and worker lifecycle logs without exchange IO.
+
+5. **Real Live Execution**
+
+   Load active contracts, fetch live rates through the ingestion exchange boundary, persist `LiveFundingPoint` records with conflict-ignored inserts, and record execution outcome through structured logs.
+
+6. **Adapter Parity**
+
+   Port live exchange behavior into `fundingpulse/ingestion/exchanges/` until ingestion covers the exchanges selected by `FT_EXCHANGES`.
+
+7. **Runtime And Cutover**
 
    Wire the ingestion scheduler and live workers into deployment, use the initial worker count default, disable the tracker live job, and run an end-to-end smoke check for enqueue -> claim -> fetch -> persist -> complete.
-
-## Initial Implementation Scope
-
-The initial implementation should include:
-
-- code under `fundingpulse/ingestion/live/`;
-- live ingestion exchange adapters under `fundingpulse/ingestion/exchanges/`;
-- a Postgres-backed live ingestion task queue;
-- an APScheduler-based ingestion scheduler process;
-- a bounded live funding enqueuer job;
-- universal single-task worker processes;
-- task claiming with row-level locking;
-- live funding fetch and existing `live_funding_point` persistence;
-- structured log events for reliability and observability;
-- disabling the existing tracker live job when the new pipeline is enabled.
