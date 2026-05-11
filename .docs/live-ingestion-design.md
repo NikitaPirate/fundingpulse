@@ -8,7 +8,7 @@ Live funding is the first pipeline because it has the smallest useful boundary: 
 
 The pipeline should collect live funding snapshots for all enabled exchanges, write them to the existing `live_funding_point` table, and emit structured logs that make the service understandable in production.
 
-This is not a standalone live subsystem. It is the first step toward moving tracker responsibilities into ingestion piece by piece. The existing tracker is the source of current behavior; implementation agents should inspect `fundingpulse/tracker/` when they need exact exchange selection, DB runtime, adapter, persistence, or deployment context.
+This is not a standalone live subsystem. It is the first step toward moving tracker responsibilities into ingestion piece by piece. The existing tracker is the source of current behavior; implementation agents should inspect `fundingpulse/tracker/` when they need exact DB runtime, adapter, persistence, or deployment context. Exchange selection is now a shared configuration boundary, not tracker-owned behavior.
 
 ## Non-Goals
 
@@ -32,7 +32,7 @@ The initial live ingestion adapter surface should include only what live ingesti
 
 Common ingestion code owns scheduler wiring, enqueuer registration, queue primitives, task lifecycle transitions, and shared settings. Live-specific code owns live scheduling policy, live task execution, live exchange adapter contracts, and `live_funding_point` persistence.
 
-Ingestion-owned settings use the `FI_*` namespace and follow the repository's existing settings layout rules.
+Ingestion-owned settings use the `FI_*` namespace and follow the repository's existing settings layout rules. Shared data-collection settings stay outside service prefixes; enabled exchange selection is owned by `ENABLED_EXCHANGES`.
 
 ## Runtime Topology
 
@@ -58,7 +58,9 @@ N universal live workers
 
 Workers are universal. A worker can process a task for any enabled exchange.
 
-Enabled exchanges initially follow the existing tracker exchange selection semantics, `FT_EXCHANGES`. The parser/resolver should be shared or extracted so ingestion does not import tracker runtime code just to select exchanges.
+Enabled exchanges come from the shared `ENABLED_EXCHANGES` setting. The parser and resolver live outside tracker runtime code so ingestion can resolve its own exchange registry without importing tracker.
+
+`ENABLED_EXCHANGES` uses comma-separated exchange IDs. Empty or unset means all exchanges supported by the running service. Explicit unknown or duplicate exchange IDs are configuration errors, not warnings and not a fallback to all exchanges.
 
 The scheduler process is intentionally thin. It owns periodic invocation, but it does not fetch exchange data and does not contain task creation semantics beyond calling registered enqueuer jobs.
 
@@ -81,7 +83,7 @@ In v0, the scheduler process registers one enqueuer job: the live funding enqueu
 
 ```text
 live funding enqueuer job
-  -> resolve enabled exchanges from FT_EXCHANGES
+  -> resolve enabled exchanges from ENABLED_EXCHANGES
   -> determine the current scheduled interval
   -> mark stale running live tasks as failed
   -> create live funding tasks according to the live scheduling invariant
@@ -326,7 +328,7 @@ Implementation phases should be scoped by behavioral boundary and approximate si
 
 0. **Preflight Extraction And DRY Review**
 
-   Review existing tracker code before adding ingestion code. Extract only shared pieces ingestion needs immediately, such as exchange selection parsing, DB runtime config helpers, or logging helpers. Do not perform speculative abstractions.
+   Review existing tracker code before adding ingestion code. Extract only shared pieces ingestion needs immediately and that should survive tracker removal, such as exchange selection parsing or DB runtime config helpers. Do not extract tracker-only logging helpers or perform speculative abstractions.
 
 1. **Ingestion Contracts And Schema**
 
@@ -350,7 +352,7 @@ Implementation phases should be scoped by behavioral boundary and approximate si
 
 6. **Adapter Parity**
 
-   Port live exchange behavior into `fundingpulse/ingestion/exchanges/` until ingestion covers the exchanges selected by `FT_EXCHANGES`.
+   Port live exchange behavior into `fundingpulse/ingestion/exchanges/` until ingestion covers the exchanges selected by `ENABLED_EXCHANGES`.
 
 7. **Runtime And Cutover**
 
