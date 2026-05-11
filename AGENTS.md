@@ -59,23 +59,24 @@ Pre-commit runs ruff (lint + format) and pyright. Config in `pyproject.toml`. Mi
 
 Single `.env` at the repo root. One loader, one rule for naming.
 
-**Loading.** Each settings module — `fundingpulse/db_settings.py`, `fundingpulse/api/settings.py`, `fundingpulse/tracker/settings.py` — calls `load_dotenv()` at the top. No `env_file=` in `SettingsConfigDict`; settings read only `os.environ`.
+**Loading.** Each settings module — `fundingpulse/db_settings.py`, `fundingpulse/exchange_selection.py`, `fundingpulse/api/settings.py`, `fundingpulse/tracker/settings.py` — calls `load_dotenv()` at the top. No `env_file=` in `SettingsConfigDict`; settings read only `os.environ`.
 
 **Naming.** Every variable belongs to exactly one namespace:
 
 | Prefix | Owner | Used for |
 |---|---|---|
 | `DB_*` | shared | DB connection (host/port/user/password/dbname). Single source of truth for both services. |
+| `ENABLED_EXCHANGES` | shared | Comma-separated exchange allowlist. Single source of truth for data collection services. |
 | `FDA_DB_*` | API | SQLAlchemy engine/session tuning specific to the API. |
 | `FDA_CORS_*` | API | CORS middleware. |
-| `FT_*` | tracker | Tracker app knobs (exchanges, debug scopes, instance sharding). |
+| `FT_*` | tracker | Tracker app knobs (debug scopes, instance sharding). |
 | `FT_DB_*` | tracker | SQLAlchemy engine/session tuning specific to the tracker. |
 | `FT_INSTANCE_COUNT` | deploy | Read by supervisord only — fan-out factor for tracker processes. Not a Python setting. |
 | `API_PORT` | deploy | Compose host-side port mapping. Not a Python setting. |
 
 Rule: if a value is shared across services → no service prefix. If it's owned by one service → service prefix (`FDA_` / `FT_`). Subsystems inside a service get a sub-prefix (`FDA_DB_`, `FDA_CORS_`, `FT_DB_`).
 
-**Class layout.** Composition, never inheritance between settings classes. Each subsystem is its own `BaseSettings` with one `env_prefix`; the service-level `Settings` is a plain `BaseModel` wiring them together. No `Field(alias=...)`.
+**Class layout.** Concrete settings classes own exactly one env namespace. Service-level `Settings` classes are plain `BaseModel` objects wiring concrete settings together. Abstract shared settings base classes may be used only when the subclass explicitly owns `env_prefix` and the base class does not create ambiguous env names. No `Field(alias=...)`.
 
 ## Deploy
 

@@ -12,6 +12,7 @@ from pydantic import BaseModel, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from fundingpulse.db_settings import DBSettings, DBTuningBase, db_tuning_config
+from fundingpulse.exchange_selection import ExchangeSelectionSettings
 
 load_dotenv()
 
@@ -37,7 +38,6 @@ class TrackerAppSettings(BaseSettings):
         extra="ignore",
     )
 
-    exchanges: str | None = None
     debug_exchanges: str | None = None
     debug_exchanges_live: str | None = None
     instance_id: int = 0
@@ -49,6 +49,7 @@ class Settings(BaseModel):
 
     db: DBSettings
     db_tuning: TrackerDBTuning
+    exchange_selection: ExchangeSelectionSettings
     app: TrackerAppSettings
 
 
@@ -56,5 +57,6 @@ def build_settings() -> Settings:
     return Settings(
         db=DBSettings(),  # pyright: ignore[reportCallIssue]
         db_tuning=TrackerDBTuning(),
+        exchange_selection=ExchangeSelectionSettings(),
         app=TrackerAppSettings(),
     )

@@ -65,4 +65,4 @@ transaction, so crash recovery repeats the last window safely via conflict-ignor
 
 ## Configuration
 
-`settings.py` defines the tracker config surface. The source of truth for variable names is `fundingpulse/tracker/settings.py` plus `.env.example`; shared DB credentials stay in `DB_*`, tracker knobs in `FT_*`, and docker fan-out in `FT_INSTANCE_COUNT`.
+`settings.py` defines the tracker config surface. The source of truth for variable names is `fundingpulse/tracker/settings.py`, shared settings modules, and `.env.example`; shared DB credentials stay in `DB_*`, shared exchange selection is `ENABLED_EXCHANGES`, tracker knobs stay in `FT_*`, and docker fan-out stays in `FT_INSTANCE_COUNT`.

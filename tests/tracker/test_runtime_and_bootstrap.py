@@ -7,6 +7,7 @@ import pytest
 
 from fundingpulse.db import DBRuntimeConfig, SessionFactory
 from fundingpulse.db_settings import DBSettings
+from fundingpulse.exchange_selection import ExchangeSelectionSettings
 from fundingpulse.tracker.bootstrap import bootstrap
 from fundingpulse.tracker.exchanges import EXCHANGES
 from fundingpulse.tracker.main import _http_max_connections_for_exchanges
@@ -27,6 +28,7 @@ def test_build_runtime_config_merges_db_runtime_overrides() -> None:
             engine_kwargs={"pool_size": 99},
             session_kwargs={},
         ),
+        exchange_selection=ExchangeSelectionSettings.model_construct(enabled_exchanges=None),
         app=TrackerAppSettings.model_construct(),
     )
     args = Namespace(
@@ -44,6 +46,86 @@ def test_build_runtime_config_merges_db_runtime_overrides() -> None:
     assert config.db.engine_kwargs["pool_size"] == 99
     assert config.db.engine_kwargs["pool_pre_ping"] is True
     assert config.db.session_kwargs == {"expire_on_commit": False}
+
+
+def test_build_runtime_config_rejects_unknown_enabled_exchange() -> None:
+    settings = Settings(
+        db=DBSettings.model_construct(
+            host="localhost",
+            port=5432,
+            user="tracker",
+            password="tracker",
+            dbname="fundingpulse",
+        ),
+        db_tuning=TrackerDBTuning(),
+        exchange_selection=ExchangeSelectionSettings.model_construct(
+            enabled_exchanges=("bybit", "missing")
+        ),
+        app=TrackerAppSettings.model_construct(),
+    )
+    args = Namespace(
+        exchanges=None,
+        debug_exchanges=None,
+        debug_exchanges_live=None,
+        instance_id=None,
+        total_instances=None,
+    )
+
+    with pytest.raises(ValueError, match="ENABLED_EXCHANGES contains unknown exchange IDs"):
+        build_runtime_config(args=args, settings=settings, all_exchanges={"bybit", "okx"})
+
+
+def test_build_runtime_config_cli_exchanges_override_enabled_exchanges() -> None:
+    settings = Settings(
+        db=DBSettings.model_construct(
+            host="localhost",
+            port=5432,
+            user="tracker",
+            password="tracker",
+            dbname="fundingpulse",
+        ),
+        db_tuning=TrackerDBTuning(),
+        exchange_selection=ExchangeSelectionSettings.model_construct(
+            enabled_exchanges=("okx",)
+        ),
+        app=TrackerAppSettings.model_construct(),
+    )
+    args = Namespace(
+        exchanges="bybit",
+        debug_exchanges=None,
+        debug_exchanges_live=None,
+        instance_id=None,
+        total_instances=None,
+    )
+
+    config = build_runtime_config(args=args, settings=settings, all_exchanges={"bybit", "okx"})
+
+    assert config.exchanges == ["bybit"]
+
+
+def test_build_runtime_config_rejects_duplicate_cli_exchanges() -> None:
+    settings = Settings(
+        db=DBSettings.model_construct(
+            host="localhost",
+            port=5432,
+            user="tracker",
+            password="tracker",
+            dbname="fundingpulse",
+        ),
+        db_tuning=TrackerDBTuning(),
+        exchange_selection=ExchangeSelectionSettings.model_construct(enabled_exchanges=None),
+        app=TrackerAppSettings.model_construct(),
+    )
+    args = Namespace(
+        exchanges="bybit,bybit",
+        debug_exchanges=None,
+        debug_exchanges_live=None,
+        instance_id=None,
+        total_instances=None,
+    )
+
+    with pytest.raises(ValueError, match="--exchanges contains duplicate exchange IDs"):
+        build_runtime_config(args=args, settings=settings, all_exchanges={"bybit", "okx"})
 
 
 def test_http_max_connections_scales_with_exchange_assignment() -> None:

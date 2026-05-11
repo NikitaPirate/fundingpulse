@@ -29,7 +29,7 @@ Instance Scaling:
   --total-instances N  Total number of instances (default: from env, fallback 1)
 
 Environment Variables:
-  FT_EXCHANGES            Comma-separated list of exchanges (overridden by CLI)
+  ENABLED_EXCHANGES       Comma-separated shared exchange allowlist (overridden by CLI)
   FT_DEBUG_EXCHANGES      Comma-separated list for debug logging
   FT_DEBUG_EXCHANGES_LIVE Comma-separated list for live collection debug logging
   FT_INSTANCE_ID          Instance identifier for multi-instance deployment

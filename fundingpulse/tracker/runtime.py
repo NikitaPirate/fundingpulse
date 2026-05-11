@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import argparse
-import logging
 from dataclasses import dataclass
 
 from fundingpulse.db import DBRuntimeConfig
+from fundingpulse.exchange_selection import (
+    parse_exchange_ids,
+    resolve_enabled_exchanges,
+)
 from fundingpulse.tracker.settings import Settings
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -29,7 +30,12 @@ def build_runtime_config(
 ) -> RuntimeConfig:
     """Resolve final runtime configuration used by main()."""
     app = settings.app
-    exchanges_arg = args.exchanges if args.exchanges is not None else app.exchanges
+    exchanges_source = "--exchanges" if args.exchanges is not None else "ENABLED_EXCHANGES"
+    exchanges_arg = (
+        parse_exchange_ids(args.exchanges)
+        if args.exchanges is not None
+        else settings.exchange_selection.enabled_exchanges
+    )
     debug_exchanges_arg = (
         args.debug_exchanges if args.debug_exchanges is not None else app.debug_exchanges
     )
@@ -50,10 +56,11 @@ def build_runtime_config(
     if instance_id >= total_instances:
         raise ValueError("FT_INSTANCE_ID must be less than FT_TOTAL_INSTANCES")
 
-    exchanges = _parse_exchanges_spec(exchanges_arg, all_exchanges)
-
-    if exchanges is None:
-        exchanges = sorted(all_exchanges)
+    exchanges = resolve_enabled_exchanges(
+        exchanges_arg,
+        all_exchanges,
+        source=exchanges_source,
+    )
 
     if total_instances > 1:
         exchanges = _filter_exchanges_by_instance(exchanges, instance_id, total_instances)
@@ -72,31 +79,6 @@ def build_runtime_config(
         instance_id=instance_id,
         total_instances=total_instances,
     )
-
-
-def _parse_exchanges_spec(exchanges_spec: str | None, all_exchanges: set[str]) -> list[str] | None:
-    """Parse and validate comma-separated exchanges string."""
-    if not exchanges_spec:
-        return None
-
-    requested = {item.strip() for item in exchanges_spec.split(",") if item.strip()}
-    if not requested:
-        return None
-
-    unknown = requested - all_exchanges
-    if unknown:
-        logger.warning(
-            "Unknown exchange IDs requested: %s. Available exchanges: %s",
-            sorted(unknown),
-            sorted(all_exchanges),
-        )
-
-    valid = sorted(requested & all_exchanges)
-    if valid:
-        logger.info("Filtered to %s exchange(s): %s", len(valid), valid)
-        return valid
-
-    return None
 
 
 def _filter_exchanges_by_instance(
