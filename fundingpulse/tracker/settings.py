@@ -5,28 +5,27 @@ one env_prefix. The outer Settings is a plain BaseModel that wires them together
 See AGENTS.md (Configuration) for the rules behind this layout.
 """
 
-from typing import Any
+from typing import Self
 
 from dotenv import load_dotenv
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from fundingpulse.db_settings import DBSettings
+from fundingpulse.db_settings import DBSettings, DBTuningBase, db_tuning_config
 
 load_dotenv()
 
 
-class TrackerDBTuning(BaseSettings):
+class TrackerDBTuning(DBTuningBase):
     """SQLAlchemy engine/session overrides for the tracker (FT_DB_*)."""
 
-    model_config = SettingsConfigDict(
-        env_prefix="FT_DB_",
-        case_sensitive=False,
-        extra="ignore",
-    )
+    model_config = db_tuning_config("FT_DB_")
 
-    engine_kwargs: dict[str, Any] | None = None
-    session_kwargs: dict[str, Any] | None = None
+    @model_validator(mode="after")
+    def reject_expiring_sessions(self) -> Self:
+        if self.session_kwargs.get("expire_on_commit") is not False:
+            raise ValueError("Tracker sessions must use expire_on_commit=False")
+        return self
 
 
 class TrackerAppSettings(BaseSettings):

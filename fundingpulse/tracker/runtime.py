@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import logging
 from dataclasses import dataclass
-from typing import Any
 
 from fundingpulse.db import DBRuntimeConfig
 from fundingpulse.tracker.settings import Settings
@@ -64,8 +63,8 @@ def build_runtime_config(
     return RuntimeConfig(
         db=DBRuntimeConfig(
             connection_url=settings.db.connection_url,
-            engine_kwargs=_resolve_engine_kwargs(settings.db_tuning.engine_kwargs),
-            session_kwargs=_resolve_session_kwargs(settings.db_tuning.session_kwargs),
+            engine_kwargs=settings.db_tuning.engine_kwargs,
+            session_kwargs=settings.db_tuning.session_kwargs,
         ),
         exchanges=exchanges,
         debug_exchanges=debug_exchanges_arg,
@@ -98,26 +97,6 @@ def _parse_exchanges_spec(exchanges_spec: str | None, all_exchanges: set[str]) -
         return valid
 
     return None
-
-
-def _resolve_engine_kwargs(service_engine_kwargs: dict[str, Any] | None) -> dict[str, Any]:
-    defaults = {
-        "echo": False,
-        "pool_pre_ping": True,
-        "pool_size": 10,
-        "max_overflow": 20,
-    }
-    return {**defaults, **(service_engine_kwargs or {})}
-
-
-def _resolve_session_kwargs(service_session_kwargs: dict[str, Any] | None) -> dict[str, Any]:
-    defaults = {
-        "expire_on_commit": False,
-    }
-    resolved = {**defaults, **(service_session_kwargs or {})}
-    if resolved.get("expire_on_commit") is not False:
-        raise ValueError("Tracker sessions must use expire_on_commit=False")
-    return resolved
 
 
 def _filter_exchanges_by_instance(

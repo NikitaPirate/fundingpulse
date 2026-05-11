@@ -1,6 +1,9 @@
 """Shared database connection settings (DB_* env namespace)."""
 
+from typing import Any, ClassVar, Self
+
 from dotenv import load_dotenv
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL
 
@@ -36,3 +39,43 @@ class DBSettings(BaseSettings):
             port=self.port,
             database=self.dbname,
         ).render_as_string(hide_password=False)
+
+
+class DBTuningBase(BaseSettings):
+    """Base for service-specific SQLAlchemy tuning settings.
+
+    Subclasses own their env_prefix. The base owns common defaults and partial
+    override merge behavior.
+    """
+
+    model_config = SettingsConfigDict(
+        case_sensitive=False,
+        extra="ignore",
+    )
+
+    default_engine_kwargs: ClassVar[dict[str, Any]] = {
+        "echo": False,
+        "pool_pre_ping": True,
+        "pool_size": 10,
+        "max_overflow": 20,
+    }
+    default_session_kwargs: ClassVar[dict[str, Any]] = {
+        "expire_on_commit": False,
+    }
+
+    engine_kwargs: dict[str, Any] = Field(default_factory=dict)
+    session_kwargs: dict[str, Any] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def apply_defaults(self) -> Self:
+        self.engine_kwargs = {**type(self).default_engine_kwargs, **self.engine_kwargs}
+        self.session_kwargs = {**type(self).default_session_kwargs, **self.session_kwargs}
+        return self
+
+
+def db_tuning_config(env_prefix: str) -> SettingsConfigDict:
+    return SettingsConfigDict(
+        env_prefix=env_prefix,
+        case_sensitive=False,
+        extra="ignore",
+    )

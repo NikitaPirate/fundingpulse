@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from argparse import Namespace
+from typing import cast
 
 import pytest
 
-from fundingpulse.db import DBRuntimeConfig
+from fundingpulse.db import DBRuntimeConfig, SessionFactory
 from fundingpulse.db_settings import DBSettings
 from fundingpulse.tracker.bootstrap import bootstrap
 from fundingpulse.tracker.exchanges import EXCHANGES
@@ -22,7 +23,7 @@ def test_build_runtime_config_merges_db_runtime_overrides() -> None:
             password="tracker",
             dbname="fundingpulse",
         ),
-        db_tuning=TrackerDBTuning.model_construct(
+        db_tuning=TrackerDBTuning(
             engine_kwargs={"pool_size": 99},
             session_kwargs={},
         ),
@@ -56,34 +57,15 @@ def test_http_max_connections_scales_with_exchange_assignment() -> None:
 
 
 def test_build_runtime_config_rejects_expiring_tracker_sessions() -> None:
-    settings = Settings(
-        db=DBSettings.model_construct(
-            host="localhost",
-            port=5432,
-            user="tracker",
-            password="tracker",
-            dbname="fundingpulse",
-        ),
-        db_tuning=TrackerDBTuning.model_construct(
-            session_kwargs={"expire_on_commit": True},
-        ),
-        app=TrackerAppSettings.model_construct(),
-    )
-    args = Namespace(
-        exchanges=None,
-        debug_exchanges=None,
-        debug_exchanges_live=None,
-        instance_id=None,
-        total_instances=None,
-    )
-
     with pytest.raises(ValueError, match="expire_on_commit=False"):
-        build_runtime_config(args=args, settings=settings, all_exchanges={"bybit", "okx"})
+        TrackerDBTuning(
+            session_kwargs={"expire_on_commit": True},
+        )
 
 
 @pytest.mark.asyncio
 async def test_bootstrap_uses_provided_session_factory() -> None:
-    session_factory = object()
+    session_factory = cast(SessionFactory, object())
 
     scheduler = await bootstrap(session_factory=session_factory, exchanges=[])
 
