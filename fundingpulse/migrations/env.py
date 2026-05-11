@@ -12,6 +12,7 @@ from fundingpulse.models import (  # noqa: F401
     Contract,
     ContractHistoryState,
     HistoricalFundingPoint,
+    IngestionTask,
     LiveFundingPoint,
     Quote,
     Section,

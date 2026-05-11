@@ -191,9 +191,8 @@ The initial task shape:
 
 ```text
 ingestion_task
-  id uuid primary key default gen_random_uuid()
+  task_key text primary key
   pipeline text not null
-  task_key text not null unique
   exchange_name text not null
   scheduled_for timestamptz not null
   payload jsonb not null default '{}'
@@ -210,7 +209,7 @@ ingestion_task
 
 `payload` is reserved for additional pipeline-specific data that is not part of the common live task identity or routing model.
 
-The database enforces task identity with a unique task key. Pipeline-specific task keys carry the namespace, for example:
+The database enforces task identity with `task_key` as the primary key. Pipeline-specific task keys carry the namespace, for example:
 
 ```text
 live_funding_snapshot:{exchange}:{scheduled_for}
@@ -223,10 +222,17 @@ The database does not enforce live scheduling policy. It should not contain a li
 Initial indexes:
 
 ```text
-(pipeline, status, created_at)       claim path
-(pipeline, exchange_name, status)    active-work checks
-(pipeline, scheduled_for)            scheduling/debug/test queries
+(pipeline, created_at) WHERE status = 'pending'
+  claim path for worker polling
+
+(pipeline, exchange_name) WHERE status IN ('pending', 'running')
+  active-work checks for live scheduling
+
+(pipeline, claimed_at) WHERE status = 'running'
+  stale-running recovery
 ```
+
+The task table intentionally does not include a surrogate `id` in the initial schema. The idempotency key is stable task identity, and using it as the primary key avoids maintaining both a UUID primary-key index and a unique task-key index. If later phases add child tables such as task attempts or task event history, a surrogate key can be reconsidered with that concrete relationship in view.
 
 The corresponding SQLModel should be exported from `fundingpulse.models`, and the migration should be the next sequential migration, currently `009_ingestion_task.py`.
 
