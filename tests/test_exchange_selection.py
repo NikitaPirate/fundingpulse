@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from fundingpulse.exchange_selection import (
+    ExchangeSelection,
     ExchangeSelectionSettings,
     parse_exchange_ids,
     resolve_enabled_exchanges,
@@ -46,3 +47,13 @@ def test_resolve_enabled_exchanges_defaults_to_all_available() -> None:
         "bybit",
         "okx",
     ]
+
+
+def test_exchange_selection_resolves_bound_selection_input() -> None:
+    selection = ExchangeSelection(
+        available_ids={"okx", "bybit"},
+        requested_ids=("okx",),
+        source="ENABLED_EXCHANGES",
+    )
+
+    assert selection.resolve() == ["okx"]

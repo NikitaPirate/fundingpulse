@@ -57,6 +57,9 @@ dev = [
 ]
 [tool.pytest.ini_options]
 pythonpath = "."
+markers = [
+    "db: tests that require a real database through testcontainers",
+]
 
 [tool.ruff]
 line-length = 99

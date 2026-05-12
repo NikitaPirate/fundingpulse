@@ -6,9 +6,11 @@ Start the migration from the current monolithic tracker into an ingestion/data-p
 
 Live funding is the first pipeline because it has the smallest useful boundary: minute cadence, existing `live_funding_point` storage, no contract registration ownership, and no historical sync checkpoint ownership.
 
-The pipeline should collect live funding snapshots for all enabled exchanges, write them to the existing `live_funding_point` table, and emit structured logs that make the service understandable in production.
+The target pipeline should collect live funding snapshots for all enabled exchanges, write them to the existing `live_funding_point` table, and emit structured logs that make the service understandable in production.
 
 This is not a standalone live subsystem. It is the first step toward moving tracker responsibilities into ingestion piece by piece. The existing tracker is the source of current behavior; implementation agents should inspect `fundingpulse/tracker/` when they need exact DB runtime, adapter, persistence, or deployment context. Exchange selection is now a shared configuration boundary, not tracker-owned behavior.
+
+Current implementation status: phases 1 and 2 are implemented. The code can store ingestion task state and schedule live funding tasks for one enqueue tick. It does not yet run a standalone scheduler process, claim or execute tasks, fetch exchange data, or write `live_funding_point` rows.
 
 ## Non-Goals
 
@@ -32,7 +34,7 @@ The initial live ingestion adapter surface should include only what live ingesti
 
 Common ingestion code should emerge from concrete pipeline use-cases. The first stable common boundary is the `ingestion_task` schema. Enqueuer, worker, execution, and adapter interfaces should be introduced by the phases that implement those behaviors, not predeclared as a generic ingestion framework.
 
-Ingestion-owned settings use the `FI_*` namespace and follow the repository's existing settings layout rules. Shared data-collection settings stay outside service prefixes; enabled exchange selection is owned by `ENABLED_EXCHANGES`.
+Ingestion-owned settings use the `FI_*` namespace and follow the repository's existing settings layout rules. Shared data-collection settings stay outside service prefixes; enabled exchange selection is owned by `ENABLED_EXCHANGES`. As of phase 2, live enqueue knobs exist as runtime-independent config objects with defaults; `FI_*` environment-backed settings should be introduced when scheduler or worker runtime wiring needs them.
 
 ## Runtime Topology
 
@@ -83,7 +85,7 @@ In v0, the scheduler process registers one enqueuer job: the live funding enqueu
 
 ```text
 live funding enqueuer job
-  -> resolve enabled exchanges from ENABLED_EXCHANGES
+  -> resolve enabled exchanges from runtime-supplied selection
   -> determine the current scheduled interval
   -> mark stale running live tasks as failed
   -> create live funding tasks according to the live scheduling invariant
@@ -92,6 +94,8 @@ live funding enqueuer job
 ```
 
 The live funding enqueuer job must be bounded by a hard timeout, default 45 seconds. It must finish successfully or fail within that timeout.
+
+The enqueuer itself accepts resolved service/runtime inputs. Later scheduler runtime wiring should build those inputs from `ENABLED_EXCHANGES` and the ingestion exchange registry, rather than making the enqueuer own environment loading.
 
 For live funding, `scheduled_for` is the current UTC minute bucket with seconds and microseconds set to zero.
 
@@ -234,7 +238,7 @@ Initial indexes:
 
 The task table intentionally does not include a surrogate `id` in the initial schema. The idempotency key is stable task identity, and using it as the primary key avoids maintaining both a UUID primary-key index and a unique task-key index. If later phases add child tables such as task attempts or task event history, a surrogate key can be reconsidered with that concrete relationship in view.
 
-The corresponding SQLModel should be exported from `fundingpulse.models`, and the migration should be the next sequential migration, currently `009_ingestion_task.py`.
+The corresponding SQLModel is exported from `fundingpulse.models`, and the migration is `009_ingestion_task.py`.
 
 ## Queue Semantics
 
@@ -285,7 +289,7 @@ The pipeline should make it possible to answer:
 
 Task status should not encode result quality such as partial coverage or empty responses. Those details belong in structured log events.
 
-Every significant lifecycle transition should emit a structured event. Expected event families:
+Every significant lifecycle transition should emit a structured event. Phase 2 emits enqueue-level events; worker and real-execution phases should add claim, fetch, persist, and completion events. Expected event families:
 
 ```text
 live_enqueue_started
@@ -340,9 +344,9 @@ Implementation phases should be scoped by behavioral boundary and approximate si
 
    Implemented the durable database boundary for ingestion work: `ingestion_task` SQLModel, migration `009_ingestion_task.py`, model export, and this document update. The table uses `task_key` as the primary key, stores task lifecycle state as text with a check constraint, and includes partial indexes for pending claim, active-work checks, and stale-running recovery. This phase intentionally did not add scheduler runtime, worker loops, exchange adapters, settings helpers, log constants, or speculative protocols.
 
-2. **Live Enqueuer**
+2. **Live Enqueuer — Completed**
 
-   Implement the live funding scheduling use-case end to end. It resolves enabled exchanges, computes the current UTC minute bucket, marks stale running live tasks as failed, checks active work per exchange, and inserts live tasks idempotently through `task_key`. It does not claim or execute tasks.
+   Implemented the live funding scheduling use-case end to end. It resolves a runtime-supplied exchange selection, computes the current UTC minute bucket, marks stale running live tasks as failed, checks active work per exchange, and inserts live tasks idempotently through `task_key`. It emits enqueue-level structured events and returns a `LiveEnqueueResult` summary. This phase intentionally did not add scheduler runtime, worker claiming/execution, exchange adapters, exchange IO, or `live_funding_point` writes.
 
 3. **Live Worker Lifecycle**
 

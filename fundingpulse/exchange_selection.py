@@ -1,6 +1,7 @@
 """Shared exchange selection settings and resolution."""
 
 from collections.abc import Collection
+from dataclasses import dataclass
 
 from dotenv import load_dotenv
 from pydantic import field_validator
@@ -26,6 +27,23 @@ class ExchangeSelectionSettings(BaseSettings):
         if isinstance(value, str):
             return parse_exchange_ids(value)
         return value
+
+
+@dataclass(frozen=True, slots=True)
+class ExchangeSelection:
+    """Resolved exchange-selection input for a service-specific registry."""
+
+    available_ids: Collection[str]
+    requested_ids: Collection[str] | None = None
+    source: str = "ENABLED_EXCHANGES"
+
+    def resolve(self) -> list[str]:
+        """Validate requested IDs against available IDs and return sorted IDs."""
+        return resolve_enabled_exchanges(
+            self.requested_ids,
+            self.available_ids,
+            source=self.source,
+        )
 
 
 def parse_exchange_ids(value: str | None) -> tuple[str, ...] | None:

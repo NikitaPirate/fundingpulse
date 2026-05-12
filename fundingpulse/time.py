@@ -82,6 +82,11 @@ def start_of_hour(value: UtcDateTime) -> UtcDateTime:
     return _require_aware_utc(value).replace(minute=0, second=0, microsecond=0)
 
 
+def start_of_minute(value: UtcDateTime) -> UtcDateTime:
+    """Round an aware UTC datetime down to the start of the minute."""
+    return _require_aware_utc(value).replace(second=0, microsecond=0)
+
+
 def _require_aware_utc(value: UtcDateTime) -> UtcDateTime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise ValueError(f"Expected aware UTC datetime, got naive value: {value!r}")
