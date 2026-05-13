@@ -524,7 +524,6 @@ async def test_get_historical_sums_coverage_and_values(
         section_names=None,
         quote_names=None,
         windows_days=[7],
-        normalize_to_interval=NormalizeToInterval.RAW,
     )
 
     by_contract = {entry.contract_id: entry for entry in result}

@@ -142,9 +142,12 @@ export async function fetchContractSummary(
   signal?: AbortSignal,
 ): Promise<SingleContractSummary> {
   const params = sliceParams(meta, normalize);
-  const windowsParams = new URLSearchParams(params.toString());
+  const avgWindowsParams = new URLSearchParams(params.toString());
+  const sumsWindowsParams = new URLSearchParams(params.toString());
+  sumsWindowsParams.delete("normalize_to_interval");
   for (const window of SUMMARY_WINDOWS) {
-    windowsParams.append("windows", window.toString());
+    avgWindowsParams.append("windows", window.toString());
+    sumsWindowsParams.append("windows", window.toString());
   }
 
   const [liveResponse, historicalLatestResponse, historicalAvgResponse, historicalSumsResponse] =
@@ -157,11 +160,11 @@ export async function fetchContractSummary(
         { signal },
       ),
       fetchApiJson<HistoricalAvgResponse>(
-        `/api/v0/funding-data/historical_avg?${windowsParams.toString()}`,
+        `/api/v0/funding-data/historical_avg?${avgWindowsParams.toString()}`,
         { signal },
       ),
       fetchApiJson<HistoricalSumsResponse>(
-        `/api/v0/funding-data/historical_sums?${windowsParams.toString()}`,
+        `/api/v0/funding-data/historical_sums?${sumsWindowsParams.toString()}`,
         { signal },
       ),
     ]);

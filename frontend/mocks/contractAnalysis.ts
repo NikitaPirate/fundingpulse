@@ -145,11 +145,7 @@ export function buildHistoricalSumsFixture(
 
       return {
         days,
-        funding_rate: applyNormalization(
-          rawSum,
-          contract.fundingInterval,
-          searchParams.get("normalize_to_interval"),
-        ),
+        funding_rate: rawSum,
         points_count: pointsCount,
         expected_count: pointsCount,
         oldest_timestamp: NOW_TS - days * 24 * 60 * 60,

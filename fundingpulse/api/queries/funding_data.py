@@ -630,7 +630,6 @@ async def get_historical_sums(
     section_names: list[str] | None,
     quote_names: list[str] | None,
     windows_days: list[int],
-    normalize_to_interval: NormalizeToInterval,
 ) -> Sequence[HistoricalSumsEntry]:
     max_days = max(windows_days)
     result = await session.execute(
@@ -686,11 +685,7 @@ async def get_historical_sums(
                 days,
                 CASE
                     WHEN points_count >= CEIL(24.0 * days / NULLIF(funding_interval, 0)) * 0.98
-                    THEN sum_rate * CASE
-                        WHEN :is_raw THEN 1.0
-                        WHEN funding_interval > 0 THEN :target_hours / funding_interval
-                        ELSE 1.0
-                    END
+                    THEN sum_rate
                     ELSE NULL
                 END AS funding_rate,
                 points_count,
@@ -702,7 +697,6 @@ async def get_historical_sums(
         ),
         {
             **_slice_params(asset_names, section_names, quote_names),
-            **_normalization_params(normalize_to_interval),
             "windows_days": windows_days,
             "max_days": max_days,
         },

@@ -184,7 +184,6 @@ async def historical_sums(
     session: SessionDep,
     slice_: ContractSlice,
     windows: WindowsValidated,
-    normalize_to_interval: NormalizeToInterval = NormalizeToInterval.RAW,
 ) -> Sequence[HistoricalSumsEntry]:
     asset_names, section_names, quote_names = slice_
     return await get_historical_sums(
@@ -193,7 +192,6 @@ async def historical_sums(
         section_names=section_names,
         quote_names=quote_names,
         windows_days=windows,
-        normalize_to_interval=normalize_to_interval,
     )
 
 

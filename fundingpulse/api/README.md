@@ -46,6 +46,10 @@ target_hours / funding_interval
 This keeps stored data faithful to the exchange while allowing the frontend to
 compare contracts on a common interval.
 
+`historical_sums` is the exception: cumulative funding is domain-level raw
+settled funding over the requested window, so the endpoint does not accept a
+normalization parameter.
+
 ## Query Model
 
 The API uses raw SQL through SQLAlchemy for the query-heavy surface. Complex

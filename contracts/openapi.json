@@ -1865,15 +1865,6 @@
         "parameters": [
           {
             "in": "query",
-            "name": "normalize_to_interval",
-            "required": false,
-            "schema": {
-              "$ref": "#/components/schemas/NormalizeToInterval",
-              "default": "raw"
-            }
-          },
-          {
-            "in": "query",
             "name": "asset_names",
             "required": false,
             "schema": {

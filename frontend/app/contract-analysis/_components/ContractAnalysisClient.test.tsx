@@ -1,12 +1,15 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 import { formatFundingValue } from "../../_lib/formatFundingValue";
 import {
+  apiUrl,
   buildHistoricalLatestFixture,
   buildLiveLatestFixture,
 } from "../../../mocks/assetFunding";
 import { buildHistoricalSumsFixture } from "../../../mocks/contractAnalysis";
+import { server } from "../../../mocks/node";
 import { ContractAnalysisClient } from "./ContractAnalysisClient";
 
 let currentSearchParams = new URLSearchParams();
@@ -58,9 +61,18 @@ describe("ContractAnalysisClient", () => {
     const settledRow = buildHistoricalLatestFixture(sliceParams).find(
       (row) => row.contract_id === "btc-bybit-usdt",
     );
+    let historicalSumsSearchParams: URLSearchParams | null = null;
+    server.use(
+      http.get(apiUrl("/api/v0/funding-data/historical_sums"), ({ request }) => {
+        historicalSumsSearchParams = new URL(request.url).searchParams;
+        return HttpResponse.json(buildHistoricalSumsFixture(historicalSumsSearchParams));
+      }),
+    );
     const sumsRow = buildHistoricalSumsFixture(
       new URLSearchParams([
-        ...sliceParams.entries(),
+        ["asset_names", "BTC"],
+        ["section_names", "bybit"],
+        ["quote_names", "USDT"],
         ["windows", "7"],
         ["windows", "14"],
         ["windows", "30"],
@@ -85,6 +97,7 @@ describe("ContractAnalysisClient", () => {
       expect(summaryRegion).toHaveTextContent(
         formatFundingValue(sumsRow?.windows[0]?.funding_rate ?? 0),
       );
+      expect(historicalSumsSearchParams?.has("normalize_to_interval")).toBe(false);
     });
   });
 

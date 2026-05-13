@@ -917,7 +917,6 @@ export interface operations {
     historical_sums_api_v0_funding_data_historical_sums_get: {
         parameters: {
             query: {
-                normalize_to_interval?: components["schemas"]["NormalizeToInterval"];
                 asset_names?: string[] | null;
                 section_names?: string[] | null;
                 quote_names?: string[] | null;

@@ -47,7 +47,7 @@ api/
 - `GET /historical_latest` — latest settled rate per contract for a filter slice (30d validity window)
 - `GET /historical_avg` — average historical funding per contract over arbitrary day windows
 
-The three slice endpoints require `asset_names` or `section_names` (quote-only is rejected), default to `365d` normalization, and return the full contract set from `contract_enriched` with nullable data fields.
+Slice endpoints require `asset_names` or `section_names` (quote-only is rejected) and return the full contract set from `contract_enriched` with nullable data fields. Rate-style slice endpoints default to `365d` normalization. `historical_sums` is deliberately raw-only: cumulative funding is a sum of settled exchange rates and does not accept normalization.
 
 ## Rate normalization
 
