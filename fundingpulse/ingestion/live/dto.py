@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -62,4 +61,10 @@ class LiveTaskExecutionResult:
     error_message: str | None = None
 
 
-LiveTaskHandler = Callable[[ClaimedLiveTask], Awaitable[None]]
+@dataclass(frozen=True, slots=True)
+class LiveCollectionResult:
+    """Observable outcome of one live funding collection."""
+
+    expected_contracts: int
+    received_rates: int
+    written_points: int

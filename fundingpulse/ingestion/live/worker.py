@@ -9,6 +9,8 @@ from time import monotonic
 from typing import Final
 
 from fundingpulse.db import SessionFactory
+from fundingpulse.ingestion.exchanges.base import BaseLiveExchange
+from fundingpulse.ingestion.live.collector import collect_live
 from fundingpulse.ingestion.live.config import LiveWorkerConfig
 from fundingpulse.ingestion.live.constants import (
     LIVE_FUNDING_PIPELINE,
@@ -20,7 +22,6 @@ from fundingpulse.ingestion.live.constants import (
 from fundingpulse.ingestion.live.dto import (
     ClaimedLiveTask,
     LiveTaskExecutionResult,
-    LiveTaskHandler,
 )
 from fundingpulse.ingestion.live.queries import (
     get_next_pending_live_task,
@@ -35,11 +36,15 @@ DEFAULT_LIVE_WORKER_CONFIG: Final = LiveWorkerConfig()
 logger = logging.getLogger(__name__)
 
 
+class UnknownLiveExchangeError(LookupError):
+    """Raised when a claimed task references an unsupported live exchange."""
+
+
 async def execute_one_live_task(
     *,
     session_factory: SessionFactory,
     worker_id: str,
-    handler: LiveTaskHandler,
+    exchange_adapters: Mapping[str, BaseLiveExchange],
     config: LiveWorkerConfig = DEFAULT_LIVE_WORKER_CONFIG,
     event_logger: logging.Logger | None = None,
 ) -> LiveTaskExecutionResult:
@@ -57,10 +62,16 @@ async def execute_one_live_task(
     started_at = monotonic()
     timeout = asyncio.timeout(config.task_timeout.total_seconds())
     try:
+        adapter = _resolve_exchange_adapter(task, exchange_adapters)
         async with timeout:
-            await handler(task)
+            await collect_live(
+                adapter=adapter,
+                task=task,
+                session_factory=session_factory,
+                event_logger=log,
+            )
     except Exception as exc:
-        # Catch all handler failures because the task finalization path is identical.
+        # Catch all execution failures because the task finalization path is identical.
         error_type = TASK_TIMEOUT_ERROR_TYPE if timeout.expired() else type(exc).__name__
         error_message = _format_timeout_message(config) if timeout.expired() else str(exc)
         return await _fail_task(
@@ -94,6 +105,16 @@ async def execute_one_live_task(
         task_key=task.task_key,
         status=TASK_STATUS_DONE,
     )
+
+
+def _resolve_exchange_adapter(
+    task: ClaimedLiveTask,
+    exchange_adapters: Mapping[str, BaseLiveExchange],
+) -> BaseLiveExchange:
+    adapter = exchange_adapters.get(task.exchange)
+    if adapter is None:
+        raise UnknownLiveExchangeError(f"No live adapter configured for exchange: {task.exchange}")
+    return adapter
 
 
 async def _claim_next_pending_live_task(

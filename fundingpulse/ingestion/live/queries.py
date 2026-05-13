@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection
+from collections.abc import Collection, Iterable, Sequence
 from typing import Any, cast
 
 from sqlalchemy import select, update
@@ -20,7 +20,9 @@ from fundingpulse.ingestion.live.constants import (
     TASK_STATUS_RUNNING,
 )
 from fundingpulse.ingestion.live.dto import LiveEnqueueTick
+from fundingpulse.models.contract import Contract
 from fundingpulse.models.ingestion_task import IngestionTask
+from fundingpulse.models.live_funding_point import LiveFundingPoint
 from fundingpulse.time import UtcDateTime
 
 
@@ -175,3 +177,42 @@ async def mark_live_task_failed(
     )
     result = await session.execute(stmt)
     return result.scalar_one_or_none() is not None
+
+
+async def get_active_contracts_by_section(
+    session: AsyncSession,
+    section_name: str,
+) -> Sequence[Contract]:
+    """Return active contracts for one exchange section."""
+    stmt = select(Contract).where(
+        col(Contract.section_name) == section_name,
+        col(Contract.deprecated).is_(False),
+    )
+    result = await session.execute(stmt)
+    return result.scalars().all()
+
+
+async def insert_live_funding_points(
+    session: AsyncSession,
+    records: Iterable[LiveFundingPoint],
+) -> int:
+    """Insert live funding points idempotently and return inserted row count."""
+    records_list = list(records)
+    if not records_list:
+        return 0
+
+    model_cls = cast(type[SQLModelWithTable], LiveFundingPoint)
+    table = model_cls.__table__
+    values = [
+        {
+            column.key: getattr(record, column.key)
+            for column in table.columns
+            if hasattr(record, column.key)
+        }
+        for record in records_list
+    ]
+    stmt = pg_insert(table).values(values).on_conflict_do_nothing().returning(table.c.contract_id)
+    result = await session.execute(stmt)
+    inserted = len(result.fetchall())
+    await session.flush()
+    return inserted

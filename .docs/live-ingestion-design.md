@@ -10,7 +10,7 @@ The target pipeline should collect live funding snapshots for all enabled exchan
 
 This is not a standalone live subsystem. It is the first step toward moving tracker responsibilities into ingestion piece by piece. The existing tracker is the source of current behavior; implementation agents should inspect `fundingpulse/tracker/` when they need exact DB runtime, adapter, persistence, or deployment context. Exchange selection is now a shared configuration boundary, not tracker-owned behavior.
 
-Current implementation status: phases 1, 2, and 3 are implemented. The code can store ingestion task state, schedule live funding tasks for one enqueue tick, and execute the core worker lifecycle around claimed tasks. It does not yet run a standalone scheduler process, run a worker polling loop, fetch exchange data, or write `live_funding_point` rows.
+Current implementation status: phases 1 through 4 are implemented. The code can store ingestion task state, schedule live funding tasks for one enqueue tick, claim and execute live funding tasks, fetch live rates through ingestion-owned live adapters for Bybit and OKX, and write `live_funding_point` rows. It does not yet run a standalone scheduler process, run a worker polling loop, or cover every exchange supported by the tracker.
 
 ## Non-Goals
 
@@ -28,9 +28,9 @@ The live ingestion implementation lives under `fundingpulse/ingestion/live/`.
 
 Exchange-specific ingestion code lives under `fundingpulse/ingestion/exchanges/`.
 
-Ingestion exchange adapters are separate from tracker exchange adapters. Their shared base should be introduced when real live execution is implemented, using the tracker adapters as the behavioral reference instead of inventing an interface before it is exercised.
+Ingestion exchange adapters are separate from tracker exchange adapters. The initial adapter base is live-only and intentionally exposes only `fetch_live(contracts)`. It uses the tracker adapters as the behavioral reference while avoiding tracker runtime imports.
 
-The initial live ingestion adapter surface should include only what live ingestion needs.
+The initial live ingestion adapter surface should include only what live ingestion needs. It does not include contract discovery or history methods; those should be introduced by the phases that migrate contract registration and history ingestion.
 
 Common ingestion code should emerge from concrete pipeline use-cases. The first stable common boundary is the `ingestion_task` schema. Enqueuer, worker, execution, and adapter interfaces should be introduced by the phases that implement those behaviors, not predeclared as a generic ingestion framework.
 
@@ -181,6 +181,23 @@ This gives process-level isolation. A slow exchange occupies one worker slot, wh
 
 Internal worker concurrency is not part of the initial design. If needed later, a worker-level concurrency option can be added, but the default model remains one task at a time.
 
+Within one claimed task, an adapter may perform internal exchange-specific fan-out, such as per-contract live HTTP requests. That is adapter execution detail, not worker concurrency. If an exchange needs request concurrency limiting, the adapter's HTTP request path may use an explicit request limiter while the worker still owns only one task at a time.
+
+The implemented live worker execution path is:
+
+```text
+execute_one_live_task
+  -> claim pending ingestion_task
+  -> resolve adapter for task.exchange
+  -> collect_live
+     -> load active contracts for task.exchange
+     -> adapter.fetch_live(contracts)
+     -> build LiveFundingPoint rows
+     -> insert rows with conflict ignored
+     -> emit fetch/persist count logs
+  -> mark task done or failed
+```
+
 ## Persistence Model
 
 The task queue is backed by a Postgres `ingestion_task` table.
@@ -328,7 +345,9 @@ Tests should focus on behavior boundaries and design invariants, not implementat
 
 The first test layer should cover the live funding enqueuer job and scheduling invariant: idempotent task creation for one scheduled interval, no backlog/catch-up behavior, and skipped scheduling when an exchange already has active work.
 
-The second test layer should cover worker execution boundaries: a claimed task is executed even when `scheduled_for` is in the past, live writes remain idempotent, failures are recorded, and required structured log events are emitted.
+The second test layer should cover worker execution boundaries: a claimed task is executed even when `scheduled_for` is in the past, live writes remain idempotent, failures are recorded, unknown exchanges fail the claimed task, and required structured log events are emitted.
+
+Live adapter tests should follow the tracker adapter-test style: fixture-driven parsing tests that exercise the public `fetch_live()` contract and assert contract-keyed `FundingPoint` output. They should not assert adapter implementation details such as exact endpoint strings, request parameter construction, or whether the adapter used a batch or parallel internal strategy.
 
 Tests should not verify APScheduler, SQLAlchemy, Postgres locking, or httpx behavior as third-party contracts. Verify how FundingPulse uses those tools: task creation idempotency, lifecycle transitions, exchange selection behavior, and emitted structured lifecycle events.
 
@@ -350,11 +369,11 @@ Implementation phases should be scoped by behavioral boundary and approximate si
 
 3. **Live Worker Lifecycle — Completed**
 
-   Implemented the worker lifecycle around the task table. The code claims one pending live task with row-level locking, executes a supplied task handler outside the claim transaction, enforces worker timeout, and marks the task `done` or `failed`. It emits worker lifecycle structured events and proves claim, completion, failure, timeout, and "old scheduled tasks still execute" behavior without exchange IO or `live_funding_point` writes.
+   Implemented the worker lifecycle around the task table. The code claims one pending live task with row-level locking, enforces worker timeout, and marks the task `done` or `failed`. It emits worker lifecycle structured events and proves claim, completion, failure, timeout, and "old scheduled tasks still execute" behavior. The initial implementation used a supplied handler to keep exchange IO out of this phase; phase 4 replaced that handler boundary with real live execution.
 
-4. **Real Live Execution**
+4. **Real Live Execution — Completed**
 
-   Implement the handler for claimed live funding tasks. It loads active contracts for the task exchange, fetches current live rates, persists `LiveFundingPoint` rows with conflict-ignored inserts, and records execution counts and errors through structured logs. Introduce the ingestion exchange adapter base here, guided by the tracker adapter behavior and shared funding point shape.
+   Implemented the real live funding execution path for claimed tasks. The worker resolves an ingestion-owned live adapter for the task exchange, calls `collect_live`, loads active contracts, fetches current live rates, persists `LiveFundingPoint` rows with conflict-ignored inserts, and records execution counts and errors through structured logs. This phase introduced a live-only ingestion adapter base and the first two adapters: Bybit for batch live fetching and OKX for per-contract parallel live fetching. Contract discovery and history adapter methods remain out of scope.
 
 5. **Scheduler Runtime**
 
@@ -366,7 +385,7 @@ Implementation phases should be scoped by behavioral boundary and approximate si
 
 7. **Adapter Parity**
 
-   Port live exchange behavior into `fundingpulse/ingestion/exchanges/` until ingestion covers the exchanges selected by `ENABLED_EXCHANGES`. Prove the adapter base with at least one batch exchange and one per-contract exchange before porting the rest.
+   Port live exchange behavior into `fundingpulse/ingestion/exchanges/` until ingestion covers the exchanges selected by `ENABLED_EXCHANGES`. The live-only adapter base has been proven with one batch exchange and one per-contract exchange; the remaining work is parity coverage for the rest of the tracker live adapters.
 
 8. **Runtime And Cutover**
 
