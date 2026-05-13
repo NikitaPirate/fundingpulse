@@ -10,7 +10,7 @@ The target pipeline should collect live funding snapshots for all enabled exchan
 
 This is not a standalone live subsystem. It is the first step toward moving tracker responsibilities into ingestion piece by piece. The existing tracker is the source of current behavior; implementation agents should inspect `fundingpulse/tracker/` when they need exact DB runtime, adapter, persistence, or deployment context. Exchange selection is now a shared configuration boundary, not tracker-owned behavior.
 
-Current implementation status: phases 1 and 2 are implemented. The code can store ingestion task state and schedule live funding tasks for one enqueue tick. It does not yet run a standalone scheduler process, claim or execute tasks, fetch exchange data, or write `live_funding_point` rows.
+Current implementation status: phases 1, 2, and 3 are implemented. The code can store ingestion task state, schedule live funding tasks for one enqueue tick, and execute the core worker lifecycle around claimed tasks. It does not yet run a standalone scheduler process, run a worker polling loop, fetch exchange data, or write `live_funding_point` rows.
 
 ## Non-Goals
 
@@ -348,9 +348,9 @@ Implementation phases should be scoped by behavioral boundary and approximate si
 
    Implemented the live funding scheduling use-case end to end. It resolves a runtime-supplied exchange selection, computes the current UTC minute bucket, marks stale running live tasks as failed, checks active work per exchange, and inserts live tasks idempotently through `task_key`. It emits enqueue-level structured events and returns a `LiveEnqueueResult` summary. This phase intentionally did not add scheduler runtime, worker claiming/execution, exchange adapters, exchange IO, or `live_funding_point` writes.
 
-3. **Live Worker Lifecycle**
+3. **Live Worker Lifecycle — Completed**
 
-   Implement the worker lifecycle around the task table: claim one pending live task with row-level locking, execute a supplied task handler, enforce worker timeout, and mark the task `done` or `failed`. This phase proves claim, completion, failure, timeout, and "old scheduled tasks still execute" behavior without exchange IO or `live_funding_point` writes.
+   Implemented the worker lifecycle around the task table. The code claims one pending live task with row-level locking, executes a supplied task handler outside the claim transaction, enforces worker timeout, and marks the task `done` or `failed`. It emits worker lifecycle structured events and proves claim, completion, failure, timeout, and "old scheduled tasks still execute" behavior without exchange IO or `live_funding_point` writes.
 
 4. **Real Live Execution**
 

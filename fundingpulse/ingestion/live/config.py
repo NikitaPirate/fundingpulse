@@ -13,3 +13,10 @@ class LiveEnqueuerConfig:
     enqueue_timeout: timedelta = timedelta(seconds=45)
     task_timeout: timedelta = timedelta(seconds=45)
     stale_running_grace: timedelta = timedelta(seconds=15)
+
+
+@dataclass(frozen=True, slots=True)
+class LiveWorkerConfig:
+    """Runtime-independent knobs for one live worker task execution."""
+
+    task_timeout: timedelta = timedelta(seconds=45)

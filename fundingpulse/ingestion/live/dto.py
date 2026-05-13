@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import Any
 
 from fundingpulse.ingestion.live.config import LiveEnqueuerConfig
 from fundingpulse.time import UtcDateTime, from_unix_seconds, start_of_minute
@@ -34,3 +36,30 @@ class LiveEnqueueResult:
     skipped_active_tasks: int
     duplicate_tasks: int
     stale_failed_tasks: int
+
+
+@dataclass(frozen=True, slots=True)
+class ClaimedLiveTask:
+    """Scalar carrier for a claimed live funding task."""
+
+    task_key: str
+    exchange: str
+    scheduled_for: UtcDateTime
+    payload: dict[str, Any]
+    created_at: UtcDateTime
+    claimed_at: UtcDateTime
+    worker_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class LiveTaskExecutionResult:
+    """Observable outcome of one live worker execution attempt."""
+
+    claimed: bool
+    task_key: str | None = None
+    status: str | None = None
+    error_type: str | None = None
+    error_message: str | None = None
+
+
+LiveTaskHandler = Callable[[ClaimedLiveTask], Awaitable[None]]

@@ -27,17 +27,25 @@ async def add_ingestion_task(
     exchange: str,
     status: str,
     scheduled_for: UtcDateTime,
+    task_key: str | None = None,
+    pipeline: str = LIVE_FUNDING_PIPELINE,
+    created_at: UtcDateTime | None = None,
     claimed_at: UtcDateTime | None = None,
+    worker_id: str | None = None,
 ) -> IngestionTask:
-    task = IngestionTask(
-        task_key=build_live_funding_task_key(exchange, scheduled_for),
-        pipeline=LIVE_FUNDING_PIPELINE,
-        exchange_name=exchange,
-        scheduled_for=scheduled_for,
-        payload={},
-        status=status,
-        claimed_at=claimed_at,
-    )
+    values = {
+        "task_key": task_key or build_live_funding_task_key(exchange, scheduled_for),
+        "pipeline": pipeline,
+        "exchange_name": exchange,
+        "scheduled_for": scheduled_for,
+        "payload": {},
+        "status": status,
+        "claimed_at": claimed_at,
+        "worker_id": worker_id,
+    }
+    if created_at is not None:
+        values["created_at"] = created_at
+    task = IngestionTask(**values)
     session.add(task)
     await session.flush()
     return task
