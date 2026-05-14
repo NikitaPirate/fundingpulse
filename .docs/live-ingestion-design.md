@@ -10,7 +10,7 @@ The target pipeline should collect live funding snapshots for all enabled exchan
 
 This is not a standalone live subsystem. It is the first step toward moving tracker responsibilities into ingestion piece by piece. The existing tracker is the source of current behavior; implementation agents should inspect `fundingpulse/tracker/` when they need exact DB runtime, adapter, persistence, or deployment context. Exchange selection is now a shared configuration boundary, not tracker-owned behavior.
 
-Current implementation status: phases 1 through 6 are implemented. The code can store ingestion task state, schedule live funding tasks on a standalone scheduler process, run a live worker polling loop, claim and execute live funding tasks, fetch live rates through ingestion-owned live adapters for Bybit and OKX, and write `live_funding_point` rows. It does not yet cover every exchange supported by the tracker or wire the new ingestion processes into deployment cutover.
+Current implementation status: phases 1 through 7 are implemented. The code can store ingestion task state, schedule live funding tasks on a standalone scheduler process, run a live worker polling loop, claim and execute live funding tasks, fetch live rates through ingestion-owned live adapters for every exchange in the shared exchange registry, and write `live_funding_point` rows. It does not yet wire the new ingestion processes into deployment cutover.
 
 ## Non-Goals
 
@@ -383,9 +383,9 @@ Implementation phases should be scoped by behavioral boundary and approximate si
 
    Added the live worker process entrypoint and one-task-at-a-time polling loop. The worker resolves the shared exchange selection, builds the live adapters currently implemented by ingestion, starts the shared HTTP client with a fixed per-process connection limit, repeatedly calls the one-task execution use-case, sleeps when no task is claimed, and continues after iteration-level runtime errors. The deployment worker count default is available as `ceil(enabled_exchanges / 3)` with a minimum of one process; process supervision wiring remains phase 8.
 
-7. **Adapter Parity**
+7. **Adapter Parity — Completed**
 
-   Port live exchange behavior into `fundingpulse/ingestion/exchanges/` until ingestion covers the exchanges selected by `ENABLED_EXCHANGES`. The live-only adapter base has been proven with one batch exchange and one per-contract exchange; the remaining work is parity coverage for the rest of the tracker live adapters.
+   Ported live exchange behavior into `fundingpulse/ingestion/exchanges/` for every exchange in the shared tracker registry. The ingestion adapters remain live-only and expose `fetch_live(contracts)` without contract discovery or history methods. Fixture-driven adapter tests reuse the tracker live scenarios to verify the public contract across batch, per-contract, mapped-symbol, and WebSocket-backed live adapters.
 
 8. **Runtime And Cutover**
 

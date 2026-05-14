@@ -18,8 +18,7 @@ from fundingpulse.ingestion.exchanges.dto import FundingPoint
 from fundingpulse.models.contract import Contract
 from fundingpulse.time import UtcDateTime
 
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
-ADAPTER_IDS = sorted(path.stem for path in FIXTURES_DIR.glob("*.json"))
+FIXTURES_DIR = Path(__file__).parents[2] / "exchanges" / "fixtures"
 
 MockHttp = Callable[..., tuple["HttpCallRecorder", "HttpCallRecorder"]]
 
@@ -44,6 +43,28 @@ class HttpCallRecorder:
         return response
 
 
+class _MockWebSocket:
+    def __init__(self, messages: list[str]) -> None:
+        self._messages = iter(messages)
+
+    async def send(self, data: str) -> None:
+        del data
+
+    async def recv(self) -> str:
+        return next(self._messages)
+
+
+class _MockWsConnection:
+    def __init__(self, messages: list[str]) -> None:
+        self._messages = messages
+
+    async def __aenter__(self) -> _MockWebSocket:
+        return _MockWebSocket(self._messages)
+
+    async def __aexit__(self, *args: Any) -> None:
+        del args
+
+
 @pytest.fixture
 def mock_http(monkeypatch: pytest.MonkeyPatch) -> MockHttp:
     def _setup(
@@ -59,8 +80,28 @@ def mock_http(monkeypatch: pytest.MonkeyPatch) -> MockHttp:
     return _setup
 
 
+def _fixture_stem_to_exchange_id(stem: str) -> str:
+    return (
+        stem.replace("binance_coin_m", "binance_coin-m")
+        .replace(
+            "binance_usd_m",
+            "binance_usd-m",
+        )
+        .replace("hyperliquid_xyz", "hyperliquid-xyz")
+    )
+
+
+def _exchange_id_to_fixture_name(exchange_id: str) -> str:
+    return f"{exchange_id.replace('-', '_')}.json"
+
+
+ADAPTER_IDS = sorted(
+    _fixture_stem_to_exchange_id(path.stem) for path in FIXTURES_DIR.glob("*.json")
+)
+
+
 def load_fixture(exchange_id: str) -> dict[str, Any]:
-    return json.loads((FIXTURES_DIR / f"{exchange_id}.json").read_text())
+    return json.loads((FIXTURES_DIR / _exchange_id_to_fixture_name(exchange_id)).read_text())
 
 
 def build_contract(defn: dict[str, Any]) -> Contract:
@@ -73,8 +114,12 @@ def build_contract(defn: dict[str, Any]) -> Contract:
     )
 
 
-def make_adapter(exchange_id: str) -> BaseLiveExchange:
-    return build_live_exchange_adapters([exchange_id])[exchange_id]
+def make_adapter(exchange_id: str, state: dict[str, Any] | None = None) -> BaseLiveExchange:
+    adapter = build_live_exchange_adapters([exchange_id])[exchange_id]
+    if state:
+        for key, value in state.items():
+            setattr(adapter, key, value)
+    return adapter
 
 
 def assert_aware_utc_timestamp(value: UtcDateTime) -> None:
@@ -89,13 +134,19 @@ def assert_aware_utc_timestamp(value: UtcDateTime) -> None:
 async def test_fetch_live_returns_contract_funding_points(
     exchange_id: str,
     mock_http: MockHttp,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """fetch_live returns contract-keyed FundingPoint values."""
     fixture = load_fixture(exchange_id)
     scenario = fixture["fetch_live"]
     mock_http(scenario.get("http_get", []), scenario.get("http_post", []))
+    if ws_messages := scenario.get("ws_responses"):
+        monkeypatch.setattr(
+            "websockets.connect",
+            lambda url, **kwargs: _MockWsConnection(ws_messages),
+        )
     contract = build_contract(scenario["contract"])
-    adapter = make_adapter(exchange_id)
+    adapter = make_adapter(exchange_id, scenario.get("adapter_state"))
 
     result = await adapter.fetch_live([contract])
 

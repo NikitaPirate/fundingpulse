@@ -3,7 +3,7 @@
 One test module, three parametrized tests, 15 fixture files.
 Test code is shared; only data varies per adapter.
 
-Adding a new adapter: create fixtures/{exchange_id}.json, zero test code changes.
+Adding a new adapter: create tests/exchanges/fixtures/{exchange_id}.json, zero test code changes.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from fundingpulse.tracker.exchanges import EXCHANGES
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 
-FIXTURES_DIR = Path(__file__).parent / "fixtures"
+FIXTURES_DIR = Path(__file__).parents[2] / "exchanges" / "fixtures"
 ADAPTER_IDS = sorted(EXCHANGES.keys())
 
 # Fixed timestamps used across all fetch_history tests.
