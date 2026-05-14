@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Final
 
 from fundingpulse.db import SessionFactory
-from fundingpulse.exchange_selection import ExchangeSelection
 from fundingpulse.ingestion.live.config import LiveEnqueuerConfig
 from fundingpulse.ingestion.live.constants import (
     LIVE_FUNDING_PIPELINE,
@@ -30,7 +29,7 @@ logger = logging.getLogger(__name__)
 async def enqueue_live_funding_tick(
     *,
     session_factory: SessionFactory,
-    exchange_selection: ExchangeSelection,
+    exchanges: Sequence[str],
     now: UtcDateTime | None = None,
     config: LiveEnqueuerConfig = DEFAULT_LIVE_ENQUEUER_CONFIG,
     event_logger: logging.Logger | None = None,
@@ -48,10 +47,9 @@ async def enqueue_live_funding_tick(
 
     try:
         async with asyncio.timeout(config.enqueue_timeout.total_seconds()):
-            exchanges = exchange_selection.resolve()
             return await _enqueue_live_funding_tick(
                 session_factory=session_factory,
-                exchanges=exchanges,
+                exchanges=list(exchanges),
                 tick=tick,
                 log=log,
             )

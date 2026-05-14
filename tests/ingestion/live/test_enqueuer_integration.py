@@ -7,7 +7,6 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from fundingpulse.db import SessionFactory
-from fundingpulse.exchange_selection import ExchangeSelection
 from fundingpulse.ingestion.live.config import LiveEnqueuerConfig
 from fundingpulse.ingestion.live.constants import (
     LIVE_FUNDING_PIPELINE,
@@ -37,10 +36,7 @@ async def test_enqueue_live_funding_tick_creates_one_task_per_selected_exchange(
 
     result = await enqueue_live_funding_tick(
         session_factory=ingestion_session_factory,
-        exchange_selection=ExchangeSelection(
-            available_ids={"okx", "bybit"},
-            requested_ids=("bybit", "okx"),
-        ),
+        exchanges=["bybit", "okx"],
         now=now,
         event_logger=event_logger,
     )
@@ -92,10 +88,7 @@ async def test_enqueue_live_funding_tick_skips_exchange_with_existing_pending_wo
 
     result = await enqueue_live_funding_tick(
         session_factory=ingestion_session_factory,
-        exchange_selection=ExchangeSelection(
-            available_ids={"bybit", "okx"},
-            requested_ids=("bybit", "okx"),
-        ),
+        exchanges=["bybit", "okx"],
         now=utc_datetime(2026, 5, 8, 12, 34, 56),
         event_logger=event_logger,
     )
@@ -135,10 +128,7 @@ async def test_enqueue_live_funding_tick_fails_stale_running_work_before_schedul
 
     result = await enqueue_live_funding_tick(
         session_factory=ingestion_session_factory,
-        exchange_selection=ExchangeSelection(
-            available_ids={"bybit"},
-            requested_ids=("bybit",),
-        ),
+        exchanges=["bybit"],
         now=now,
         config=LiveEnqueuerConfig(task_timeout=timedelta(seconds=45)),
     )
