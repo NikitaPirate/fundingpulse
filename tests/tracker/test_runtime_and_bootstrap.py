@@ -46,6 +46,7 @@ def test_build_runtime_config_merges_db_runtime_overrides() -> None:
     assert config.db.engine_kwargs["pool_size"] == 99
     assert config.db.engine_kwargs["pool_pre_ping"] is True
     assert config.db.session_kwargs == {"expire_on_commit": False}
+    assert config.live_jobs_enabled is False
 
 
 def test_build_runtime_config_rejects_unknown_enabled_exchange() -> None:
@@ -85,9 +86,7 @@ def test_build_runtime_config_cli_exchanges_override_enabled_exchanges() -> None
             dbname="fundingpulse",
         ),
         db_tuning=TrackerDBTuning(),
-        exchange_selection=ExchangeSelectionSettings.model_construct(
-            enabled_exchanges=("okx",)
-        ),
+        exchange_selection=ExchangeSelectionSettings.model_construct(enabled_exchanges=("okx",)),
         app=TrackerAppSettings.model_construct(),
     )
     args = Namespace(
@@ -153,3 +152,24 @@ async def test_bootstrap_uses_provided_session_factory() -> None:
 
     jobs = {job.name for job in scheduler.get_jobs()}
     assert jobs == {"materialized_views_refresher", "asset_ranking_update"}
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_can_skip_tracker_live_jobs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def ensure_sections(_: SessionFactory, __: list[str]) -> None:
+        return None
+
+    monkeypatch.setattr("fundingpulse.tracker.bootstrap._ensure_sections", ensure_sections)
+    session_factory = cast(SessionFactory, object())
+
+    scheduler = await bootstrap(
+        session_factory=session_factory,
+        exchanges=["bybit"],
+        live_jobs_enabled=False,
+    )
+
+    jobs = {job.name for job in scheduler.get_jobs()}
+    assert "bybit_update" in jobs
+    assert "bybit_live" not in jobs

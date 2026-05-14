@@ -42,6 +42,7 @@ class TrackerAppSettings(BaseSettings):
     debug_exchanges_live: str | None = None
     instance_id: int = 0
     total_instances: int = 1
+    live_jobs_enabled: bool = False
 
 
 class Settings(BaseModel):

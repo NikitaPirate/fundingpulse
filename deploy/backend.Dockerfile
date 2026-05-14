@@ -28,6 +28,20 @@ EXPOSE 8000
 
 CMD ["uvicorn", "fundingpulse.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
+# ── ingestion scheduler ───────────────────────────────────────────────────────
+FROM base AS ingestion-scheduler
+
+CMD ["funding-ingestion-scheduler"]
+
+# ── ingestion live worker ─────────────────────────────────────────────────────
+FROM base AS ingestion-live-worker
+
+RUN apt-get update && apt-get install -y supervisor && rm -rf /var/lib/apt/lists/*
+
+COPY deploy/ingestion-live-worker-supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+CMD ["supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+
 # ── migrate ───────────────────────────────────────────────────────────────────
 FROM base AS migrate
 

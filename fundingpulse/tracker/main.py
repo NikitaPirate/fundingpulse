@@ -27,6 +27,7 @@ HTTP_CONNECTIONS_PER_EXCHANGE = 100
 async def run_scheduler(
     db: DBRuntimeConfig,
     exchanges: list[str] | None,
+    live_jobs_enabled: bool = False,
 ) -> None:
     """Bootstrap and run scheduler forever."""
     async with db_session_factory_scope(db) as session_factory:
@@ -35,6 +36,7 @@ async def run_scheduler(
             scheduler = await bootstrap(
                 session_factory=session_factory,
                 exchanges=exchanges,
+                live_jobs_enabled=live_jobs_enabled,
             )
             scheduler.start()
             logger.info("Scheduler started, waiting for jobs...")
@@ -84,6 +86,7 @@ def main() -> None:
             run_scheduler(
                 config.db,
                 config.exchanges,
+                config.live_jobs_enabled,
             )
         )
     except KeyboardInterrupt:

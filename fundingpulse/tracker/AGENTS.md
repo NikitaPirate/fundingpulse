@@ -17,7 +17,7 @@ main.py → DB runtime scope → bootstrap.py → ExchangeOrchestrator (per exch
 
 **main.py** — owns the top-level DB runtime scope and shared HTTP client, then hands a ready `SessionFactory` to bootstrap.
 
-**bootstrap.py** — wires everything: resolves exchanges, seeds the `section` rows once, creates APScheduler, registers jobs around the provided `SessionFactory`. Each exchange gets two cron jobs: `{exchange}_update` (hourly) and `{exchange}_live` (every minute, staggered).
+**bootstrap.py** — wires everything: resolves exchanges, seeds the `section` rows once, creates APScheduler, registers jobs around the provided `SessionFactory`. Each exchange gets `{exchange}_update` (hourly). The legacy `{exchange}_live` minute job is registered only when `FT_LIVE_JOBS_ENABLED=true`; deployment disables it after live ingestion cutover.
 
 **orchestration/** — four siblings that split the per-exchange workflow:
 - `exchange_orchestrator.py` — thin facade with `update()` / `update_live()` scheduler entry points. Bundles dependencies (adapter, DB, MV refresher, logger), delegates to the modules below, and logs cycle duration.

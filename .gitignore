@@ -53,7 +53,7 @@ htmlcov/
 .env.*.local
 
 # Docker
-docker-compose.override.yaml
+docker-compose.override.yml
 
 # Database
 *.db

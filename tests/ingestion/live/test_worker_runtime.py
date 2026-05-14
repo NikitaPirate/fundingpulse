@@ -12,23 +12,7 @@ from fundingpulse.db import SessionFactory
 from fundingpulse.ingestion.exchanges.base import BaseLiveExchange
 from fundingpulse.ingestion.live.config import LiveWorkerConfig
 from fundingpulse.ingestion.live.dto import LiveTaskExecutionResult
-from fundingpulse.ingestion.live.runtime import (
-    recommended_live_worker_count,
-    run_live_worker_loop,
-)
-
-
-def test_recommended_live_worker_count_scales_by_exchange_slots() -> None:
-    assert [recommended_live_worker_count(count) for count in range(8)] == [
-        1,
-        1,
-        1,
-        1,
-        2,
-        2,
-        2,
-        3,
-    ]
+from fundingpulse.ingestion.live.runtime import run_live_worker_loop
 
 
 @pytest.mark.asyncio

@@ -10,7 +10,7 @@ The target pipeline should collect live funding snapshots for all enabled exchan
 
 This is not a standalone live subsystem. It is the first step toward moving tracker responsibilities into ingestion piece by piece. The existing tracker is the source of current behavior; implementation agents should inspect `fundingpulse/tracker/` when they need exact DB runtime, adapter, persistence, or deployment context. Exchange selection is now a shared configuration boundary, not tracker-owned behavior.
 
-Current implementation status: phases 1 through 7 are implemented. The code can store ingestion task state, schedule live funding tasks on a standalone scheduler process, run a live worker polling loop, claim and execute live funding tasks, fetch live rates through ingestion-owned live adapters for every exchange in the shared exchange registry, and write `live_funding_point` rows. It does not yet wire the new ingestion processes into deployment cutover.
+Current implementation status: phases 1 through 8 are implemented. The code can store ingestion task state, schedule live funding tasks on a standalone scheduler process, run live worker polling loops, claim and execute live funding tasks, fetch live rates through ingestion-owned live adapters for every exchange in the shared exchange registry, write `live_funding_point` rows, and wire the new ingestion processes into deployment cutover.
 
 ## Non-Goals
 
@@ -387,6 +387,6 @@ Implementation phases should be scoped by behavioral boundary and approximate si
 
    Ported live exchange behavior into `fundingpulse/ingestion/exchanges/` for every exchange in the shared tracker registry. The ingestion adapters remain live-only and expose `fetch_live(contracts)` without contract discovery or history methods. Fixture-driven adapter tests reuse the tracker live scenarios to verify the public contract across batch, per-contract, mapped-symbol, and WebSocket-backed live adapters.
 
-8. **Runtime And Cutover**
+8. **Runtime And Cutover — Completed**
 
-   Wire the ingestion scheduler and live workers into deployment, disable the tracker live job, and run an end-to-end smoke check for enqueue -> claim -> fetch -> persist -> complete.
+   Wired live ingestion into deployment as separate scheduler and live-worker services. The scheduler service runs one `funding-ingestion-scheduler` process. The live-worker service uses supervisord to run `LIVE_INGESTION_WORKER_COUNT` `funding-ingestion-live-worker` processes, defaulting to three. The legacy tracker live job is disabled by default, while tracker contract registration, historical sync, materialized view refresh, and ranking jobs remain active. A local end-to-end smoke check confirmed enqueue -> claim -> fetch -> persist -> complete against the real Bybit adapter and persisted live funding rows.

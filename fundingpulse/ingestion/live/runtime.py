@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Mapping
-from typing import Final, Protocol
+from typing import Protocol
 
 from fundingpulse.db import SessionFactory
 from fundingpulse.ingestion.exchanges.base import BaseLiveExchange
@@ -18,8 +18,6 @@ from fundingpulse.ingestion.live.worker import (
 )
 
 logger = logging.getLogger(__name__)
-
-WORKERS_PER_EXCHANGE_SLOT: Final = 3
 
 
 class ExecuteLiveTask(Protocol):
@@ -35,13 +33,6 @@ class ExecuteLiveTask(Protocol):
 
 
 Sleep = Callable[[float], Awaitable[None]]
-
-
-def recommended_live_worker_count(enabled_exchange_count: int) -> int:
-    """Return the deployment default for live worker process count."""
-    if enabled_exchange_count <= 0:
-        return 1
-    return max(1, -(-enabled_exchange_count // WORKERS_PER_EXCHANGE_SLOT))
 
 
 async def run_live_worker_loop(
