@@ -32,6 +32,7 @@ dependencies = [
 [project.scripts]
 funding-tracker = "fundingpulse.tracker.main:main"
 funding-ingestion-scheduler = "fundingpulse.ingestion.main:main"
+funding-ingestion-live-worker = "fundingpulse.ingestion.live_worker_main:main"
 verify = "fundingpulse.tracker.tools.verify_exchange:entrypoint"
 
 [build-system]

@@ -8,9 +8,10 @@ import sys
 
 from fundingpulse.db import DBRuntimeConfig, db_session_factory_scope
 from fundingpulse.exchange_selection import resolve_enabled_exchanges
-from fundingpulse.ingestion.exchanges import LIVE_EXCHANGES
+from fundingpulse.ingestion.logging_setup import configure_logging
 from fundingpulse.ingestion.scheduler import bootstrap_scheduler
 from fundingpulse.ingestion.settings import build_settings
+from fundingpulse.tracker.exchanges import EXCHANGES
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +26,7 @@ async def run_scheduler() -> None:
     )
     exchanges = resolve_enabled_exchanges(
         settings.exchange_selection.enabled_exchanges,
-        LIVE_EXCHANGES.keys(),
+        EXCHANGES.keys(),
         source="ENABLED_EXCHANGES",
     )
 
@@ -43,20 +44,9 @@ async def run_scheduler() -> None:
             scheduler.shutdown(wait=False)
 
 
-def _configure_logging() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler()],
-    )
-    logging.getLogger("apscheduler").setLevel(logging.WARNING)
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("httpcore").setLevel(logging.WARNING)
-
-
 def main() -> None:
     """Main entrypoint used by CLI and process supervisors."""
-    _configure_logging()
+    configure_logging()
     try:
         asyncio.run(run_scheduler())
     except KeyboardInterrupt:

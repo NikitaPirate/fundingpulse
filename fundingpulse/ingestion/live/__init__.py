@@ -22,6 +22,10 @@ from fundingpulse.ingestion.live.enqueuer import (
     build_live_funding_task_key,
     enqueue_live_funding_tick,
 )
+from fundingpulse.ingestion.live.runtime import (
+    recommended_live_worker_count,
+    run_live_worker_loop,
+)
 from fundingpulse.ingestion.live.worker import (
     DEFAULT_LIVE_WORKER_CONFIG,
     UnknownLiveExchangeError,
@@ -49,4 +53,6 @@ __all__ = [
     "collect_live",
     "enqueue_live_funding_tick",
     "execute_one_live_task",
+    "recommended_live_worker_count",
+    "run_live_worker_loop",
 ]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Callable
 from pathlib import Path
@@ -11,14 +12,14 @@ from uuid import uuid4
 import pytest
 
 from fundingpulse.infrastructure import http_client
-from fundingpulse.ingestion.exchanges import LIVE_EXCHANGES
+from fundingpulse.ingestion.exchanges import build_live_exchange_adapters
 from fundingpulse.ingestion.exchanges.base import BaseLiveExchange
 from fundingpulse.ingestion.exchanges.dto import FundingPoint
 from fundingpulse.models.contract import Contract
 from fundingpulse.time import UtcDateTime
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
-ADAPTER_IDS = sorted(LIVE_EXCHANGES.keys())
+ADAPTER_IDS = sorted(path.stem for path in FIXTURES_DIR.glob("*.json"))
 
 MockHttp = Callable[..., tuple["HttpCallRecorder", "HttpCallRecorder"]]
 
@@ -29,6 +30,10 @@ class HttpCallRecorder:
     def __init__(self, responses: list[object]) -> None:
         self._responses = list(responses)
         self._index = 0
+
+    @property
+    def call_count(self) -> int:
+        return self._index
 
     async def __call__(self, url: str, **kwargs: object) -> object:
         del url, kwargs
@@ -69,7 +74,7 @@ def build_contract(defn: dict[str, Any]) -> Contract:
 
 
 def make_adapter(exchange_id: str) -> BaseLiveExchange:
-    return LIVE_EXCHANGES[exchange_id]()
+    return build_live_exchange_adapters([exchange_id])[exchange_id]
 
 
 def assert_aware_utc_timestamp(value: UtcDateTime) -> None:
@@ -100,3 +105,26 @@ async def test_fetch_live_returns_contract_funding_points(
     assert all(isinstance(point.rate, float) for point in result.values())
     for point in result.values():
         assert_aware_utc_timestamp(point.timestamp)
+
+
+@pytest.mark.asyncio
+async def test_built_live_adapter_uses_request_limiter(
+    mock_http: MockHttp,
+) -> None:
+    """Built adapters route HTTP calls through the supplied limiter."""
+    fixture = load_fixture("bybit")
+    scenario = fixture["fetch_live"]
+    get_recorder, _ = mock_http(scenario.get("http_get", []), scenario.get("http_post", []))
+    limiter = asyncio.Semaphore(0)
+    adapter = build_live_exchange_adapters(["bybit"], request_limiter=limiter)["bybit"]
+    contract = build_contract(scenario["contract"])
+
+    fetch_task = asyncio.create_task(adapter.fetch_live([contract]))
+    await asyncio.sleep(0)
+
+    assert get_recorder.call_count == 0
+    limiter.release()
+    result = await asyncio.wait_for(fetch_task, timeout=1)
+
+    assert set(result) == {contract.id}
+    assert get_recorder.call_count == 1

@@ -10,7 +10,7 @@ The target pipeline should collect live funding snapshots for all enabled exchan
 
 This is not a standalone live subsystem. It is the first step toward moving tracker responsibilities into ingestion piece by piece. The existing tracker is the source of current behavior; implementation agents should inspect `fundingpulse/tracker/` when they need exact DB runtime, adapter, persistence, or deployment context. Exchange selection is now a shared configuration boundary, not tracker-owned behavior.
 
-Current implementation status: phases 1 through 4 are implemented. The code can store ingestion task state, schedule live funding tasks for one enqueue tick, claim and execute live funding tasks, fetch live rates through ingestion-owned live adapters for Bybit and OKX, and write `live_funding_point` rows. It does not yet run a standalone scheduler process, run a worker polling loop, or cover every exchange supported by the tracker.
+Current implementation status: phases 1 through 6 are implemented. The code can store ingestion task state, schedule live funding tasks on a standalone scheduler process, run a live worker polling loop, claim and execute live funding tasks, fetch live rates through ingestion-owned live adapters for Bybit and OKX, and write `live_funding_point` rows. It does not yet cover every exchange supported by the tracker or wire the new ingestion processes into deployment cutover.
 
 ## Non-Goals
 
@@ -375,13 +375,13 @@ Implementation phases should be scoped by behavioral boundary and approximate si
 
    Implemented the real live funding execution path for claimed tasks. The worker resolves an ingestion-owned live adapter for the task exchange, calls `collect_live`, loads active contracts, fetches current live rates, persists `LiveFundingPoint` rows with conflict-ignored inserts, and records execution counts and errors through structured logs. This phase introduced a live-only ingestion adapter base and the first two adapters: Bybit for batch live fetching and OKX for per-contract parallel live fetching. Contract discovery and history adapter methods remain out of scope.
 
-5. **Scheduler Runtime**
+5. **Scheduler Runtime — Completed**
 
-   Wire APScheduler to call the live enqueuer on the minute schedule. The scheduler process remains thin: it owns periodic invocation and timeout handling, not task creation semantics or exchange IO.
+   Wired APScheduler to call the live enqueuer on the minute schedule. The scheduler process remains thin: it owns periodic invocation and timeout handling, not task creation semantics or exchange IO. The scheduler resolves `ENABLED_EXCHANGES` against the shared exchange registry and exposes the `funding-ingestion-scheduler` entrypoint.
 
-6. **Worker Runtime**
+6. **Worker Runtime — Completed**
 
-   Add the live worker process entrypoint and one-task-at-a-time loop. Use the worker count deployment default of `ceil(enabled_exchanges / 3)` with a minimum of one process.
+   Added the live worker process entrypoint and one-task-at-a-time polling loop. The worker resolves the shared exchange selection, builds the live adapters currently implemented by ingestion, starts the shared HTTP client with a fixed per-process connection limit, repeatedly calls the one-task execution use-case, sleeps when no task is claimed, and continues after iteration-level runtime errors. The deployment worker count default is available as `ceil(enabled_exchanges / 3)` with a minimum of one process; process supervision wiring remains phase 8.
 
 7. **Adapter Parity**
 

@@ -20,3 +20,4 @@ class LiveWorkerConfig:
     """Runtime-independent knobs for one live worker task execution."""
 
     task_timeout: timedelta = timedelta(seconds=45)
+    poll_interval: timedelta = timedelta(seconds=1)

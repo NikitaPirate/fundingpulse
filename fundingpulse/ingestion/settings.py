@@ -11,7 +11,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from fundingpulse.db_settings import DBSettings, DBTuningBase, db_tuning_config
 from fundingpulse.exchange_selection import ExchangeSelectionSettings
-from fundingpulse.ingestion.live.config import LiveEnqueuerConfig
+from fundingpulse.ingestion.live.config import LiveEnqueuerConfig, LiveWorkerConfig
 
 load_dotenv()
 
@@ -40,11 +40,13 @@ class IngestionLiveSettings(BaseSettings):
     enqueue_timeout_seconds: float = 45.0
     task_timeout_seconds: float = 45.0
     stale_running_grace_seconds: float = 15.0
+    worker_poll_interval_seconds: float = 1.0
 
     @field_validator(
         "enqueue_timeout_seconds",
         "task_timeout_seconds",
         "stale_running_grace_seconds",
+        "worker_poll_interval_seconds",
     )
     @classmethod
     def reject_non_positive_seconds(cls, value: float) -> float:
@@ -57,6 +59,12 @@ class IngestionLiveSettings(BaseSettings):
             enqueue_timeout=timedelta(seconds=self.enqueue_timeout_seconds),
             task_timeout=timedelta(seconds=self.task_timeout_seconds),
             stale_running_grace=timedelta(seconds=self.stale_running_grace_seconds),
+        )
+
+    def to_worker_config(self) -> LiveWorkerConfig:
+        return LiveWorkerConfig(
+            task_timeout=timedelta(seconds=self.task_timeout_seconds),
+            poll_interval=timedelta(seconds=self.worker_poll_interval_seconds),
         )
 
 
