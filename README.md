@@ -19,13 +19,16 @@ OpenAPI contract.
 flowchart LR
     Exchanges["Exchange APIs"]
     Tracker["Tracker service<br/>APScheduler + adapters"]
+    Ingestion["Ingestion services<br/>scheduler + live workers"]
     DB[("TimescaleDB<br/>hypertables + views")]
     API["FastAPI read API"]
     Contract["OpenAPI contract"]
     Frontend["Next.js frontend<br/>typed API consumer"]
 
     Exchanges --> Tracker
+    Exchanges --> Ingestion
     Tracker --> DB
+    Ingestion --> DB
     DB --> API
     API --> Contract
     Contract --> Frontend
@@ -34,9 +37,12 @@ flowchart LR
 
 The runtime is split into clear boundaries:
 
-- **Tracker** - a long-running ingestion service. It discovers contracts,
-  backfills historical funding, collects live rates, and maintains history
-  checkpoints per contract.
+- **Tracker** - a long-running scheduler. It discovers contracts, backfills
+  historical funding, maintains history checkpoints per contract, and refreshes
+  derived database views.
+- **Ingestion** - a task-based pipeline runtime. It schedules live funding
+  snapshots, claims work through Postgres, fans out universal workers, and
+  persists current unsettled rates.
 - **TimescaleDB** - storage for settled and live funding points. Funding tables
   are hypertables; heavier API paths use materialized views and continuous
   aggregates.
@@ -56,9 +62,9 @@ resumes from committed bounds and re-fetches overlapping windows safely.
 Bulk inserts ignore conflicts, so exchange pagination overlap and retry behavior
 do not duplicate data.
 
-**Exchange diversity behind one boundary.** Each exchange adapter translates
+**Exchange diversity behind one boundary.** Exchange adapters translate
 exchange-specific symbols, funding intervals, pagination, and live-rate APIs
-into a small internal contract used by the tracker.
+into small internal contracts used by the tracker and ingestion runtimes.
 
 **Funding-rate normalization at query time.** Exchanges settle on different
 intervals, commonly 1h, 4h, or 8h. The API stores raw rates and normalizes in
@@ -69,8 +75,9 @@ the frontend generates TypeScript API types from that artifact. Mocked frontend
 development uses the same surface instead of a separate hand-written shape.
 
 **Horizontally sharded collection.** Production deployment can fan out tracker
-workers through supervisord. Each worker receives an instance id and total
-instance count, then processes its own exchange shard.
+processes and live ingestion workers through supervisord. Tracker processes
+receive an instance id and total instance count; live workers claim tasks from
+Postgres and naturally spread exchange work across the pool.
 
 ## Domain Model
 
@@ -106,6 +113,8 @@ Run the backend services:
 
 ```bash
 uv run funding-tracker
+uv run funding-ingestion-scheduler
+uv run funding-ingestion-live-worker --worker-id local-worker-1
 uv run uvicorn fundingpulse.api.main:app
 ```
 
@@ -126,6 +135,8 @@ npm run frontend:dev:mock
 | Purpose | Command |
 | --- | --- |
 | Run one exchange | `uv run funding-tracker --exchanges bybit` |
+| Run live ingestion scheduler | `uv run funding-ingestion-scheduler` |
+| Run one live ingestion worker | `uv run funding-ingestion-live-worker --worker-id local-worker-1` |
 | Verify one adapter | `uv run verify hyperliquid` |
 | Run backend tests | `uv run pytest` |
 | Sync frontend API types | `npm run contract:sync` |
@@ -134,8 +145,10 @@ npm run frontend:dev:mock
 
 ## Project Map
 
-- [Tracker](fundingpulse/tracker/README.md) - ingestion engine, exchange
-  adapters, backfill, live collection, recovery model.
+- [Tracker](fundingpulse/tracker/README.md) - contract registration, exchange
+  adapters, historical backfill, checkpoint recovery model.
+- [Ingestion](fundingpulse/ingestion/README.md) - task-based live funding
+  pipeline, scheduler/worker runtime, queue semantics, deployment shape.
 - [API](fundingpulse/api/README.md) - read boundary, endpoint groups, rate
   normalization, OpenAPI contract.
 - [Frontend](frontend/README.md) - typed consumer, product views, mock mode,
