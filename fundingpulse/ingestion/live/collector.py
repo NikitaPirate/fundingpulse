@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-from collections.abc import Mapping
 from time import monotonic
 
 from fundingpulse.db import SessionFactory
@@ -15,9 +13,10 @@ from fundingpulse.ingestion.live.queries import (
     insert_live_funding_points,
 )
 from fundingpulse.models.live_funding_point import LiveFundingPoint
+from fundingpulse.observability.logging import EventLogger, get_logger
 from fundingpulse.time import to_iso8601
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def collect_live(
@@ -25,7 +24,7 @@ async def collect_live(
     adapter: BaseLiveExchange,
     task: ClaimedLiveTask,
     session_factory: SessionFactory,
-    event_logger: logging.Logger | None = None,
+    event_logger: EventLogger | None = None,
 ) -> LiveCollectionResult:
     """Fetch and persist one exchange-level live funding snapshot."""
     log = event_logger or logger
@@ -84,19 +83,18 @@ async def collect_live(
 
 
 def _log_task_event(
-    log: logging.Logger,
+    log: EventLogger,
     event: str,
     *,
     task: ClaimedLiveTask,
     **fields: object,
 ) -> None:
-    extra: Mapping[str, object] = {
-        "event": event,
-        "pipeline": LIVE_FUNDING_PIPELINE,
-        "task_key": task.task_key,
-        "exchange": task.exchange,
-        "scheduled_for": to_iso8601(task.scheduled_for),
-        "worker_id": task.worker_id,
+    log.info(
+        event,
+        pipeline=LIVE_FUNDING_PIPELINE,
+        task_key=task.task_key,
+        exchange=task.exchange,
+        scheduled_for=to_iso8601(task.scheduled_for),
+        worker_id=task.worker_id,
         **fields,
-    }
-    log.info(event, extra=extra)
+    )

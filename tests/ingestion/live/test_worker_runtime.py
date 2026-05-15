@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from collections.abc import Mapping
 from datetime import timedelta
 from typing import cast
@@ -13,6 +12,8 @@ from fundingpulse.ingestion.exchanges.base import BaseLiveExchange
 from fundingpulse.ingestion.live.config import LiveWorkerConfig
 from fundingpulse.ingestion.live.dto import LiveTaskExecutionResult
 from fundingpulse.ingestion.live.runtime import run_live_worker_loop
+from fundingpulse.observability.logging import EventLogger
+from tests.ingestion.live.helpers import RecordingEventLogger
 
 
 @pytest.mark.asyncio
@@ -28,7 +29,7 @@ async def test_live_worker_loop_executes_one_task_at_a_time() -> None:
         worker_id: str,
         exchange_adapters: Mapping[str, BaseLiveExchange],
         config: LiveWorkerConfig,
-        event_logger: logging.Logger | None = None,
+        event_logger: EventLogger | None = None,
     ) -> LiveTaskExecutionResult:
         nonlocal active_calls, max_active_calls, calls
         del session_factory, worker_id, exchange_adapters, config, event_logger
@@ -65,7 +66,7 @@ async def test_live_worker_loop_sleeps_when_no_task_is_claimed() -> None:
         worker_id: str,
         exchange_adapters: Mapping[str, BaseLiveExchange],
         config: LiveWorkerConfig,
-        event_logger: logging.Logger | None = None,
+        event_logger: EventLogger | None = None,
     ) -> LiveTaskExecutionResult:
         del session_factory, worker_id, exchange_adapters, config, event_logger
         return LiveTaskExecutionResult(claimed=False)
@@ -88,12 +89,9 @@ async def test_live_worker_loop_sleeps_when_no_task_is_claimed() -> None:
 
 
 @pytest.mark.asyncio
-async def test_live_worker_loop_continues_after_iteration_error(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
+async def test_live_worker_loop_continues_after_iteration_error() -> None:
     stop_event = asyncio.Event()
-    event_logger = logging.getLogger("tests.ingestion.live_worker.runtime")
-    caplog.set_level(logging.INFO, logger=event_logger.name)
+    event_logger = RecordingEventLogger()
     calls = 0
     sleeps = 0
 
@@ -103,7 +101,7 @@ async def test_live_worker_loop_continues_after_iteration_error(
         worker_id: str,
         exchange_adapters: Mapping[str, BaseLiveExchange],
         config: LiveWorkerConfig,
-        event_logger: logging.Logger | None = None,
+        event_logger: EventLogger | None = None,
     ) -> LiveTaskExecutionResult:
         nonlocal calls
         del session_factory, worker_id, exchange_adapters, config, event_logger
@@ -132,9 +130,7 @@ async def test_live_worker_loop_continues_after_iteration_error(
     assert calls == 2
     assert sleeps == 1
     failed_record = next(
-        record
-        for record in caplog.records
-        if getattr(record, "event", None) == "live_worker_iteration_failed"
+        record for record in event_logger.records if record.event == "live_worker_iteration_failed"
     )
     failed_fields = failed_record.__dict__
     assert failed_fields["error_type"] == "RuntimeError"

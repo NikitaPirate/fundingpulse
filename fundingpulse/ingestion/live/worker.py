@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from collections.abc import Mapping
 from time import monotonic
 from typing import Final
@@ -29,11 +28,12 @@ from fundingpulse.ingestion.live.queries import (
     mark_live_task_failed,
 )
 from fundingpulse.models.ingestion_task import IngestionTask
+from fundingpulse.observability.logging import EventLogger, get_logger
 from fundingpulse.time import to_iso8601, utc_now
 
 DEFAULT_LIVE_WORKER_CONFIG: Final = LiveWorkerConfig()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class UnknownLiveExchangeError(LookupError):
@@ -46,7 +46,7 @@ async def execute_one_live_task(
     worker_id: str,
     exchange_adapters: Mapping[str, BaseLiveExchange],
     config: LiveWorkerConfig = DEFAULT_LIVE_WORKER_CONFIG,
-    event_logger: logging.Logger | None = None,
+    event_logger: EventLogger | None = None,
 ) -> LiveTaskExecutionResult:
     """Claim and execute one pending live funding task, if one exists."""
     log = event_logger or logger
@@ -144,7 +144,7 @@ async def _fail_task(
     task: ClaimedLiveTask,
     error_type: str,
     error_message: str,
-    log: logging.Logger,
+    log: EventLogger,
     started_at: float,
 ) -> LiveTaskExecutionResult:
     finished_at = utc_now()
@@ -196,7 +196,7 @@ def _to_claimed_live_task(
     )
 
 
-def _log_task_claimed(log: logging.Logger, task: ClaimedLiveTask) -> None:
+def _log_task_claimed(log: EventLogger, task: ClaimedLiveTask) -> None:
     queue_wait_seconds = (task.claimed_at - task.created_at).total_seconds()
     _log_task_event(
         log,
@@ -207,14 +207,13 @@ def _log_task_claimed(log: logging.Logger, task: ClaimedLiveTask) -> None:
 
 
 def _log_task_event(
-    log: logging.Logger,
+    log: EventLogger,
     event: str,
     *,
     task: ClaimedLiveTask,
     **fields: object,
 ) -> None:
-    _log_event(
-        log,
+    log.info(
         event,
         pipeline=LIVE_FUNDING_PIPELINE,
         task_key=task.task_key,
@@ -223,11 +222,6 @@ def _log_task_event(
         worker_id=task.worker_id,
         **fields,
     )
-
-
-def _log_event(log: logging.Logger, event: str, **fields: object) -> None:
-    extra: Mapping[str, object] = {"event": event, **fields}
-    log.info(event, extra=extra)
 
 
 def _format_timeout_message(config: LiveWorkerConfig) -> str:

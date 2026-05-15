@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import logging
 import os
 import socket
 import sys
@@ -17,9 +16,10 @@ from fundingpulse.ingestion.exchanges import build_live_exchange_adapters
 from fundingpulse.ingestion.live.runtime import run_live_worker_loop
 from fundingpulse.ingestion.logging_setup import configure_logging
 from fundingpulse.ingestion.settings import build_settings
+from fundingpulse.observability.logging import get_logger
 from fundingpulse.tracker.exchanges import EXCHANGES
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 LIVE_WORKER_HTTP_MAX_CONNECTIONS: Final = 100
 LIVE_WORKER_REQUEST_CONCURRENCY: Final = 10
@@ -56,10 +56,11 @@ async def run_worker(worker_id: str | None = None) -> None:
         await http_client.startup(max_connections=LIVE_WORKER_HTTP_MAX_CONNECTIONS)
         try:
             logger.info(
-                "Live ingestion worker started: worker_id=%s, exchanges=%s, adapters=%s",
-                resolved_worker_id,
-                exchanges,
-                sorted(adapters),
+                "ingestion_live_worker_started",
+                worker_id=resolved_worker_id,
+                exchange_count=len(exchanges),
+                exchanges=list(exchanges),
+                adapters=sorted(adapters),
             )
             await run_live_worker_loop(
                 session_factory=session_factory,
@@ -78,13 +79,21 @@ def _default_worker_id() -> str:
 def main() -> None:
     """Main entrypoint used by CLI and process supervisors."""
     args = build_parser().parse_args()
-    configure_logging()
+    configure_logging(component="live-worker")
     try:
         asyncio.run(run_worker(worker_id=args.worker_id))
     except KeyboardInterrupt:
-        logger.info("Application stopped by user")
+        logger.info(
+            "ingestion_application_stopped",
+            reason="keyboard_interrupt",
+        )
     except Exception as exc:
-        logger.error("Application error: %s", exc, exc_info=True)
+        logger.error(
+            "ingestion_application_error",
+            error_type=type(exc).__name__,
+            error_message=str(exc),
+            exc_info=True,
+        )
         sys.exit(1)
 
 

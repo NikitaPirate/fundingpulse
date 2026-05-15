@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import logging
 
+from fundingpulse.observability.logging import configure_json_logging
 
-def configure_logging() -> None:
+
+def configure_logging(*, component: str) -> None:
     """Configure process-level logging for ingestion runtimes."""
-    logging.basicConfig(
+    configure_json_logging(
+        service="ingestion",
+        component=component,
         level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler()],
     )
     logging.getLogger("apscheduler").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from datetime import timedelta
 from typing import Any, NoReturn, cast
 
@@ -15,6 +14,7 @@ from fundingpulse.ingestion.live.enqueuer import (
     enqueue_live_funding_tick,
 )
 from fundingpulse.time import utc_datetime
+from tests.ingestion.live.helpers import RecordingEventLogger
 
 
 class FailingSessionFactory:
@@ -46,11 +46,8 @@ def test_live_funding_task_key_is_stable() -> None:
 
 
 @pytest.mark.asyncio
-async def test_enqueue_live_funding_tick_logs_failed_event_for_execution_error(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    event_logger = logging.getLogger("tests.ingestion.live_enqueuer.failure")
-    caplog.set_level(logging.INFO, logger=event_logger.name)
+async def test_enqueue_live_funding_tick_logs_failed_event_for_execution_error() -> None:
+    event_logger = RecordingEventLogger()
 
     with pytest.raises(RuntimeError, match="database unavailable"):
         await enqueue_live_funding_tick(
@@ -61,9 +58,7 @@ async def test_enqueue_live_funding_tick_logs_failed_event_for_execution_error(
         )
 
     failed_record = next(
-        record
-        for record in caplog.records
-        if getattr(record, "event", None) == "live_enqueue_failed"
+        record for record in event_logger.records if record.event == "live_enqueue_failed"
     )
     failed_fields = cast(dict[str, Any], failed_record.__dict__)
     assert failed_fields["pipeline"] == LIVE_FUNDING_PIPELINE

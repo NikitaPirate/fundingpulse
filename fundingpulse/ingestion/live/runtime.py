@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Protocol
 
@@ -16,8 +15,9 @@ from fundingpulse.ingestion.live.worker import (
     DEFAULT_LIVE_WORKER_CONFIG,
     execute_one_live_task,
 )
+from fundingpulse.observability.logging import EventLogger, get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class ExecuteLiveTask(Protocol):
@@ -28,7 +28,7 @@ class ExecuteLiveTask(Protocol):
         worker_id: str,
         exchange_adapters: Mapping[str, BaseLiveExchange],
         config: LiveWorkerConfig,
-        event_logger: logging.Logger | None = None,
+        event_logger: EventLogger | None = None,
     ) -> LiveTaskExecutionResult: ...
 
 
@@ -42,7 +42,7 @@ async def run_live_worker_loop(
     exchange_adapters: Mapping[str, BaseLiveExchange],
     config: LiveWorkerConfig = DEFAULT_LIVE_WORKER_CONFIG,
     stop_event: asyncio.Event | None = None,
-    event_logger: logging.Logger | None = None,
+    event_logger: EventLogger | None = None,
     execute_task: ExecuteLiveTask = execute_one_live_task,
     sleep: Sleep = asyncio.sleep,
 ) -> None:
@@ -74,12 +74,5 @@ async def run_live_worker_loop(
             await sleep(config.poll_interval.total_seconds())
 
 
-def _log_event(log: logging.Logger, event: str, **fields: object) -> None:
-    log.info(
-        event,
-        extra={
-            "event": event,
-            "pipeline": LIVE_FUNDING_PIPELINE,
-            **fields,
-        },
-    )
+def _log_event(log: EventLogger, event: str, **fields: object) -> None:
+    log.info(event, pipeline=LIVE_FUNDING_PIPELINE, **fields)

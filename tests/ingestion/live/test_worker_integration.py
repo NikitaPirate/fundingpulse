@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from datetime import timedelta
 from uuid import UUID
 
@@ -27,6 +26,7 @@ from fundingpulse.models.live_funding_point import LiveFundingPoint
 from fundingpulse.testing.helpers.data_helpers import create_contract
 from fundingpulse.time import utc_datetime
 from tests.ingestion.live.helpers import (
+    RecordingEventLogger,
     all_ingestion_tasks,
     insert_ingestion_task,
 )
@@ -92,10 +92,8 @@ async def test_execute_one_live_task_returns_unclaimed_when_no_pending_task(
 async def test_execute_one_live_task_collects_live_rates_and_marks_task_done(
     ingestion_session_factory: SessionFactory,
     db_session: AsyncSession,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    event_logger = logging.getLogger("tests.ingestion.live_worker.success")
-    caplog.set_level(logging.INFO, logger=event_logger.name)
+    event_logger = RecordingEventLogger()
     scheduled_for = utc_datetime(2026, 5, 8, 12, 30)
     point_time = utc_datetime(2026, 5, 8, 12, 30, 5)
     contract = await create_contract(
@@ -133,16 +131,14 @@ async def test_execute_one_live_task_collects_live_rates_and_marks_task_done(
         (contract.id, point_time, 0.001),
     ]
 
-    events = [getattr(record, "event", None) for record in caplog.records]
+    events = [record.event for record in event_logger.records]
     assert "live_task_claimed" in events
     assert "live_fetch_started" in events
     assert "live_fetch_completed" in events
     assert "live_persist_completed" in events
     assert "live_task_completed" in events
     completed_record = next(
-        record
-        for record in caplog.records
-        if getattr(record, "event", None) == "live_task_completed"
+        record for record in event_logger.records if record.event == "live_task_completed"
     )
     completed_fields = completed_record.__dict__
     assert completed_fields["pipeline"] == LIVE_FUNDING_PIPELINE
@@ -188,10 +184,8 @@ async def test_execute_one_live_task_executes_task_scheduled_in_the_past(
 async def test_execute_one_live_task_marks_adapter_exception_failed(
     ingestion_session_factory: SessionFactory,
     db_session: AsyncSession,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    event_logger = logging.getLogger("tests.ingestion.live_worker.failure")
-    caplog.set_level(logging.INFO, logger=event_logger.name)
+    event_logger = RecordingEventLogger()
     await create_contract(
         db_session,
         asset_name="BTC",
@@ -224,7 +218,7 @@ async def test_execute_one_live_task_marks_adapter_exception_failed(
     assert tasks[0].error_message == "boom"
 
     failed_record = next(
-        record for record in caplog.records if getattr(record, "event", None) == "live_task_failed"
+        record for record in event_logger.records if record.event == "live_task_failed"
     )
     failed_fields = failed_record.__dict__
     assert failed_fields["error_type"] == "RuntimeError"

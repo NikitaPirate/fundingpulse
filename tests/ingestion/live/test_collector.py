@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from uuid import UUID
 
 import pytest
@@ -17,7 +16,7 @@ from fundingpulse.models.contract import Contract
 from fundingpulse.models.live_funding_point import LiveFundingPoint
 from fundingpulse.testing.helpers.data_helpers import create_contract
 from fundingpulse.time import utc_datetime
-from tests.ingestion.live.helpers import add_ingestion_task
+from tests.ingestion.live.helpers import RecordingEventLogger, add_ingestion_task
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.db]
 
@@ -94,10 +93,8 @@ async def test_collect_live_succeeds_without_active_contracts(
 async def test_collect_live_writes_partial_adapter_response_and_logs_counts(
     ingestion_session_factory: SessionFactory,
     db_session: AsyncSession,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    event_logger = logging.getLogger("tests.ingestion.live_collector.partial")
-    caplog.set_level(logging.INFO, logger=event_logger.name)
+    event_logger = RecordingEventLogger()
     task = await _claimed_task(db_session, "bybit")
     btc = await create_contract(
         db_session,
@@ -135,9 +132,7 @@ async def test_collect_live_writes_partial_adapter_response_and_logs_counts(
 
     points = await _live_points(db_session)
     persist_record = next(
-        record
-        for record in caplog.records
-        if getattr(record, "event", None) == "live_persist_completed"
+        record for record in event_logger.records if record.event == "live_persist_completed"
     )
     assert result.expected_contracts == 2
     assert result.received_rates == 1

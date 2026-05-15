@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import sys
 
 from fundingpulse.db import DBRuntimeConfig, db_session_factory_scope
@@ -11,9 +10,10 @@ from fundingpulse.exchange_selection import resolve_enabled_exchanges
 from fundingpulse.ingestion.logging_setup import configure_logging
 from fundingpulse.ingestion.scheduler import bootstrap_scheduler
 from fundingpulse.ingestion.settings import build_settings
+from fundingpulse.observability.logging import get_logger
 from fundingpulse.tracker.exchanges import EXCHANGES
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def run_scheduler() -> None:
@@ -37,7 +37,11 @@ async def run_scheduler() -> None:
             live_config=settings.live.to_enqueuer_config(),
         )
         scheduler.start()
-        logger.info("Ingestion scheduler started")
+        logger.info(
+            "ingestion_scheduler_started",
+            exchange_count=len(exchanges),
+            job_count=len(scheduler.get_jobs()),
+        )
         try:
             await asyncio.Event().wait()
         finally:
@@ -46,13 +50,21 @@ async def run_scheduler() -> None:
 
 def main() -> None:
     """Main entrypoint used by CLI and process supervisors."""
-    configure_logging()
+    configure_logging(component="scheduler")
     try:
         asyncio.run(run_scheduler())
     except KeyboardInterrupt:
-        logger.info("Application stopped by user")
+        logger.info(
+            "ingestion_application_stopped",
+            reason="keyboard_interrupt",
+        )
     except Exception as exc:
-        logger.error("Application error: %s", exc, exc_info=True)
+        logger.error(
+            "ingestion_application_error",
+            error_type=type(exc).__name__,
+            error_message=str(exc),
+            exc_info=True,
+        )
         sys.exit(1)
 
 

@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from typing import Final
 
 from fundingpulse.db import SessionFactory
@@ -19,11 +18,12 @@ from fundingpulse.ingestion.live.queries import (
     insert_pending_live_task,
     mark_stale_running_live_tasks_failed,
 )
+from fundingpulse.observability.logging import EventLogger, get_logger
 from fundingpulse.time import UtcDateTime, to_iso8601, utc_now
 
 DEFAULT_LIVE_ENQUEUER_CONFIG: Final = LiveEnqueuerConfig()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 async def enqueue_live_funding_tick(
@@ -32,14 +32,13 @@ async def enqueue_live_funding_tick(
     exchanges: Sequence[str],
     now: UtcDateTime | None = None,
     config: LiveEnqueuerConfig = DEFAULT_LIVE_ENQUEUER_CONFIG,
-    event_logger: logging.Logger | None = None,
+    event_logger: EventLogger | None = None,
 ) -> LiveEnqueueResult:
     """Schedule live funding snapshot tasks for one UTC minute bucket."""
     log = event_logger or logger
     tick = LiveEnqueueTick.from_instant(now or utc_now(), config)
 
-    _log_event(
-        log,
+    log.info(
         "live_enqueue_started",
         pipeline=LIVE_FUNDING_PIPELINE,
         scheduled_for=to_iso8601(tick.scheduled_for),
@@ -54,8 +53,7 @@ async def enqueue_live_funding_tick(
                 log=log,
             )
     except Exception as exc:
-        _log_event(
-            log,
+        log.info(
             "live_enqueue_failed",
             pipeline=LIVE_FUNDING_PIPELINE,
             scheduled_for=to_iso8601(tick.scheduled_for),
@@ -70,7 +68,7 @@ async def _enqueue_live_funding_tick(
     session_factory: SessionFactory,
     exchanges: list[str],
     tick: LiveEnqueueTick,
-    log: logging.Logger,
+    log: EventLogger,
 ) -> LiveEnqueueResult:
     async with session_factory.begin() as session:
         stale_tasks = await mark_stale_running_live_tasks_failed(
@@ -103,8 +101,7 @@ async def _enqueue_live_funding_tick(
             )
             if created:
                 created_tasks += 1
-                _log_event(
-                    log,
+                log.info(
                     "live_task_created",
                     pipeline=LIVE_FUNDING_PIPELINE,
                     task_key=task_key,
@@ -129,8 +126,7 @@ async def _enqueue_live_funding_tick(
         duplicate_tasks=duplicate_tasks,
         stale_failed_tasks=len(stale_tasks),
     )
-    _log_event(
-        log,
+    log.info(
         "live_enqueue_completed",
         pipeline=LIVE_FUNDING_PIPELINE,
         scheduled_for=to_iso8601(tick.scheduled_for),
@@ -150,15 +146,14 @@ def build_live_funding_task_key(exchange: str, scheduled_for: UtcDateTime) -> st
 
 
 def _log_task_skipped(
-    log: logging.Logger,
+    log: EventLogger,
     *,
     task_key: str,
     exchange: str,
     scheduled_for: UtcDateTime,
     reason: str,
 ) -> None:
-    _log_event(
-        log,
+    log.info(
         "live_task_skipped",
         pipeline=LIVE_FUNDING_PIPELINE,
         task_key=task_key,
@@ -166,8 +161,3 @@ def _log_task_skipped(
         scheduled_for=to_iso8601(scheduled_for),
         reason=reason,
     )
-
-
-def _log_event(log: logging.Logger, event: str, **fields: object) -> None:
-    extra: Mapping[str, object] = {"event": event, **fields}
-    log.info(event, extra=extra)

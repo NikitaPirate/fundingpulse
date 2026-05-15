@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from datetime import timedelta
 
 import pytest
@@ -20,7 +19,11 @@ from fundingpulse.ingestion.live.enqueuer import (
     enqueue_live_funding_tick,
 )
 from fundingpulse.time import utc_datetime
-from tests.ingestion.live.helpers import all_ingestion_tasks, insert_ingestion_task
+from tests.ingestion.live.helpers import (
+    RecordingEventLogger,
+    all_ingestion_tasks,
+    insert_ingestion_task,
+)
 
 pytestmark = [pytest.mark.asyncio, pytest.mark.db]
 
@@ -28,10 +31,8 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.db]
 async def test_enqueue_live_funding_tick_creates_one_task_per_selected_exchange(
     ingestion_session_factory: SessionFactory,
     db_session: AsyncSession,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    event_logger = logging.getLogger("tests.ingestion.live_enqueuer")
-    caplog.set_level(logging.INFO, logger=event_logger.name)
+    event_logger = RecordingEventLogger()
     now = utc_datetime(2026, 5, 8, 12, 34, 56)
 
     result = await enqueue_live_funding_tick(
@@ -52,16 +53,15 @@ async def test_enqueue_live_funding_tick_creates_one_task_per_selected_exchange(
     assert result.skipped_active_tasks == 0
     assert result.stale_failed_tasks == 0
 
-    events = [getattr(record, "event", None) for record in caplog.records]
+    events = [record.event for record in event_logger.records]
     assert "live_enqueue_started" in events
     assert events.count("live_task_created") == 2
     assert "live_enqueue_completed" in events
 
     created_record = next(
         record
-        for record in caplog.records
-        if getattr(record, "event", None) == "live_task_created"
-        and getattr(record, "exchange", None) == "bybit"
+        for record in event_logger.records
+        if record.event == "live_task_created" and record.exchange == "bybit"
     )
     created_fields = created_record.__dict__
     assert created_fields["pipeline"] == LIVE_FUNDING_PIPELINE
@@ -75,10 +75,8 @@ async def test_enqueue_live_funding_tick_creates_one_task_per_selected_exchange(
 async def test_enqueue_live_funding_tick_skips_exchange_with_existing_pending_work(
     ingestion_session_factory: SessionFactory,
     db_session: AsyncSession,
-    caplog: pytest.LogCaptureFixture,
 ) -> None:
-    event_logger = logging.getLogger("tests.ingestion.live_enqueuer")
-    caplog.set_level(logging.INFO, logger=event_logger.name)
+    event_logger = RecordingEventLogger()
     await insert_ingestion_task(
         ingestion_session_factory,
         exchange="bybit",
@@ -103,9 +101,8 @@ async def test_enqueue_live_funding_tick_skips_exchange_with_existing_pending_wo
 
     skipped_record = next(
         record
-        for record in caplog.records
-        if getattr(record, "event", None) == "live_task_skipped"
-        and getattr(record, "exchange", None) == "bybit"
+        for record in event_logger.records
+        if record.event == "live_task_skipped" and record.exchange == "bybit"
     )
     skipped_fields = skipped_record.__dict__
     assert skipped_fields["reason"] == "active_work"

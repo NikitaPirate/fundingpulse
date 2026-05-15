@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from collections.abc import Sequence
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -11,9 +10,10 @@ from apscheduler.triggers.cron import CronTrigger
 from fundingpulse.db import SessionFactory
 from fundingpulse.ingestion.live.config import LiveEnqueuerConfig
 from fundingpulse.ingestion.live.enqueuer import enqueue_live_funding_tick
+from fundingpulse.observability.logging import get_logger
 from fundingpulse.time import UTC
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def bootstrap_scheduler(
@@ -38,9 +38,9 @@ def bootstrap_scheduler(
         live_config=live_config,
     )
     logger.info(
-        "Ingestion scheduler bootstrap complete: %s exchange(s), %s job(s)",
-        len(exchanges),
-        len(scheduler.get_jobs()),
+        "ingestion_scheduler_bootstrapped",
+        exchange_count=len(exchanges),
+        job_count=len(scheduler.get_jobs()),
     )
     return scheduler
 
