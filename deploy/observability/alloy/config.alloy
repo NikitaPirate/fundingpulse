@@ -1,0 +1,94 @@
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+discovery.docker "fundingpulse" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "fundingpulse_ingestion_logs" {
+  targets = discovery.docker.fundingpulse.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    action        = "keep"
+    regex         = "ingestion-scheduler|ingestion-live-worker"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
+    target_label  = "compose_project"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    target_label  = "compose_service"
+  }
+
+  rule {
+    target_label = "job"
+    replacement  = "fundingpulse/ingestion"
+  }
+}
+
+loki.source.docker "fundingpulse_ingestion_logs" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.fundingpulse_ingestion_logs.output
+  forward_to = [loki.process.fundingpulse_ingestion_logs.receiver]
+}
+
+loki.process "fundingpulse_ingestion_logs" {
+  stage.docker {}
+
+  stage.json {
+    expressions = {
+      service       = "",
+      component     = "",
+      level         = "",
+      event         = "",
+      logger        = "logger",
+      pipeline      = "",
+      exchange      = "",
+      worker_id     = "",
+      task_key      = "",
+      scheduled_for = "",
+      error_type    = "",
+    }
+  }
+
+  stage.labels {
+    values = {
+      service   = "",
+      component = "",
+      level     = "",
+      event     = "",
+      pipeline  = "",
+      exchange  = "",
+    }
+  }
+
+  stage.structured_metadata {
+    values = {
+      logger        = "",
+      worker_id     = "",
+      task_key      = "",
+      scheduled_for = "",
+      error_type    = "",
+    }
+  }
+
+  forward_to = [loki.write.fundingpulse.receiver]
+}
+
+loki.write "fundingpulse" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

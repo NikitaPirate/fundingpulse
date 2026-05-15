@@ -1,0 +1,31 @@
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+
+common:
+  ring:
+    # This matches Grafana's own local single-binary filesystem example.
+    # It is correct only while Loki runs as one monolithic instance in one
+    # container. If Loki is later scaled out or split into separate services,
+    # this must become a real reachable instance address and the ring backend
+    # must stop being in-memory.
+    instance_addr: 127.0.0.1
+    kvstore:
+      store: inmemory
+  replication_factor: 1
+  path_prefix: /loki
+
+schema_config:
+  configs:
+    - from: 2026-05-15
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+storage_config:
+  filesystem:
+    directory: /loki/chunks

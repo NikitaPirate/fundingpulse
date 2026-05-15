@@ -124,6 +124,15 @@ Run the frontend:
 npm run frontend:dev
 ```
 
+Run the observability stack for ingestion logs:
+
+```bash
+docker compose up -d loki alloy grafana
+```
+
+Then open Grafana at `http://127.0.0.1:3001` and explore the provisioned Loki
+data source. Set `GF_SECURITY_ADMIN_PASSWORD` in `.env` before starting it.
+
 For frontend work without a live API:
 
 ```bash
