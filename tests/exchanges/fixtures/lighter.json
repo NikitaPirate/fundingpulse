@@ -42,12 +42,18 @@
       "section_name": "lighter",
       "funding_interval": 1
     },
-    "adapter_state": {"_asset_to_id": {"BTC": 1}},
     "ws_responses": [
       "{\"type\": \"connected\"}",
       "{\"market_stats\": {\"1\": {\"current_funding_rate\": \"0.01\"}}}"
     ],
-    "http_get": [],
+    "http_get": [
+      {
+        "order_books": [
+          {"symbol": "BTC", "market_id": 1, "market_type": "perp"},
+          {"symbol": "ETH", "market_id": 2, "market_type": "spot"}
+        ]
+      }
+    ],
     "http_post": [],
     "expected_count_gte": 1
   }

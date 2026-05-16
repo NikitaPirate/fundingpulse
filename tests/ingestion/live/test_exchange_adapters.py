@@ -179,3 +179,36 @@ async def test_built_live_adapter_uses_request_limiter(
 
     assert set(result) == {contract.id}
     assert get_recorder.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_lighter_live_refreshes_market_ids_only_for_unknown_ws_markets(
+    mock_http: MockHttp,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Lighter reloads market ids when websocket exposes an unknown market id."""
+    fixture = load_fixture("lighter")
+    scenario = fixture["fetch_live"]
+    get_recorder, _ = mock_http(scenario["http_get"], scenario["http_post"])
+    monkeypatch.setattr(
+        "websockets.connect",
+        lambda url, **kwargs: _MockWsConnection(scenario["ws_responses"]),
+    )
+    adapter = make_adapter("lighter")
+    contract = build_contract(scenario["contract"])
+
+    result = await adapter.fetch_live([contract])
+
+    assert set(result) == {contract.id}
+    assert get_recorder.call_count == 1
+
+    get_recorder, _ = mock_http([], [])
+    monkeypatch.setattr(
+        "websockets.connect",
+        lambda url, **kwargs: _MockWsConnection(scenario["ws_responses"]),
+    )
+
+    result = await adapter.fetch_live([contract])
+
+    assert set(result) == {contract.id}
+    assert get_recorder.call_count == 0
