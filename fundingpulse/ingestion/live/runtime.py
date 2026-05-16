@@ -60,19 +60,16 @@ async def run_live_worker_loop(
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            _log_event(
-                log,
+            log.exception(
                 "live_worker_iteration_failed",
+                pipeline=LIVE_FUNDING_PIPELINE,
                 worker_id=worker_id,
                 error_type=type(exc).__name__,
                 error_message=str(exc),
+                exc_info=exc,
             )
             await sleep(config.poll_interval.total_seconds())
             continue
 
         if not result.claimed:
             await sleep(config.poll_interval.total_seconds())
-
-
-def _log_event(log: EventLogger, event: str, **fields: object) -> None:
-    log.info(event, pipeline=LIVE_FUNDING_PIPELINE, **fields)

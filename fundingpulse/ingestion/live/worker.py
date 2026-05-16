@@ -58,7 +58,9 @@ async def execute_one_live_task(
     if task is None:
         return LiveTaskExecutionResult(claimed=False)
 
-    _log_task_claimed(log, task)
+    task_log = _bind_task_logger(log, task)
+
+    _log_task_claimed(task_log, task)
     started_at = monotonic()
     timeout = asyncio.timeout(config.task_timeout.total_seconds())
     try:
@@ -68,7 +70,7 @@ async def execute_one_live_task(
                 adapter=adapter,
                 task=task,
                 session_factory=session_factory,
-                event_logger=log,
+                event_logger=task_log,
             )
     except Exception as exc:
         # Catch all execution failures because the task finalization path is identical.
@@ -79,8 +81,9 @@ async def execute_one_live_task(
             task=task,
             error_type=error_type,
             error_message=error_message,
-            log=log,
+            task_log=task_log,
             started_at=started_at,
+            exc=exc,
         )
 
     finished_at = utc_now()
@@ -94,10 +97,8 @@ async def execute_one_live_task(
     if not updated:
         raise RuntimeError(f"Running live task was not finalized: {task.task_key}")
 
-    _log_task_event(
-        log,
+    task_log.info(
         "live_task_completed",
-        task=task,
         duration_seconds=monotonic() - started_at,
     )
     return LiveTaskExecutionResult(
@@ -144,8 +145,9 @@ async def _fail_task(
     task: ClaimedLiveTask,
     error_type: str,
     error_message: str,
-    log: EventLogger,
+    task_log: EventLogger,
     started_at: float,
+    exc: Exception,
 ) -> LiveTaskExecutionResult:
     finished_at = utc_now()
     async with session_factory.begin() as session:
@@ -160,13 +162,12 @@ async def _fail_task(
     if not updated:
         raise RuntimeError(f"Running live task was not finalized: {task.task_key}")
 
-    _log_task_event(
-        log,
+    task_log.exception(
         "live_task_failed",
-        task=task,
         duration_seconds=monotonic() - started_at,
         error_type=error_type,
         error_message=error_message,
+        exc_info=exc,
     )
     return LiveTaskExecutionResult(
         claimed=True,
@@ -196,31 +197,21 @@ def _to_claimed_live_task(
     )
 
 
-def _log_task_claimed(log: EventLogger, task: ClaimedLiveTask) -> None:
+def _log_task_claimed(task_log: EventLogger, task: ClaimedLiveTask) -> None:
     queue_wait_seconds = (task.claimed_at - task.created_at).total_seconds()
-    _log_task_event(
-        log,
+    task_log.info(
         "live_task_claimed",
-        task=task,
         queue_wait_seconds=queue_wait_seconds,
     )
 
 
-def _log_task_event(
-    log: EventLogger,
-    event: str,
-    *,
-    task: ClaimedLiveTask,
-    **fields: object,
-) -> None:
-    log.info(
-        event,
+def _bind_task_logger(log: EventLogger, task: ClaimedLiveTask) -> EventLogger:
+    return log.bind(
         pipeline=LIVE_FUNDING_PIPELINE,
         task_key=task.task_key,
         exchange=task.exchange,
         scheduled_for=to_iso8601(task.scheduled_for),
         worker_id=task.worker_id,
-        **fields,
     )
 
 

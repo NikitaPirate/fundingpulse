@@ -38,11 +38,12 @@ async def enqueue_live_funding_tick(
     log = event_logger or logger
     tick = LiveEnqueueTick.from_instant(now or utc_now(), config)
 
-    log.info(
-        "live_enqueue_started",
+    tick_log = log.bind(
         pipeline=LIVE_FUNDING_PIPELINE,
         scheduled_for=to_iso8601(tick.scheduled_for),
     )
+
+    tick_log.info("live_enqueue_started")
 
     try:
         async with asyncio.timeout(config.enqueue_timeout.total_seconds()):
@@ -50,15 +51,14 @@ async def enqueue_live_funding_tick(
                 session_factory=session_factory,
                 exchanges=list(exchanges),
                 tick=tick,
-                log=log,
+                tick_log=tick_log,
             )
     except Exception as exc:
-        log.info(
+        tick_log.exception(
             "live_enqueue_failed",
-            pipeline=LIVE_FUNDING_PIPELINE,
-            scheduled_for=to_iso8601(tick.scheduled_for),
             error_type=type(exc).__name__,
             error_message=str(exc),
+            exc_info=exc,
         )
         raise
 
@@ -68,7 +68,7 @@ async def _enqueue_live_funding_tick(
     session_factory: SessionFactory,
     exchanges: list[str],
     tick: LiveEnqueueTick,
-    log: EventLogger,
+    tick_log: EventLogger,
 ) -> LiveEnqueueResult:
     async with session_factory.begin() as session:
         stale_tasks = await mark_stale_running_live_tasks_failed(
@@ -85,10 +85,9 @@ async def _enqueue_live_funding_tick(
             if exchange in active_exchanges:
                 skipped_active_tasks += 1
                 _log_task_skipped(
-                    log,
+                    tick_log,
                     task_key=task_key,
                     exchange=exchange,
-                    scheduled_for=tick.scheduled_for,
                     reason="active_work",
                 )
                 continue
@@ -101,20 +100,17 @@ async def _enqueue_live_funding_tick(
             )
             if created:
                 created_tasks += 1
-                log.info(
+                tick_log.info(
                     "live_task_created",
-                    pipeline=LIVE_FUNDING_PIPELINE,
                     task_key=task_key,
                     exchange=exchange,
-                    scheduled_for=to_iso8601(tick.scheduled_for),
                 )
             else:
                 duplicate_tasks += 1
                 _log_task_skipped(
-                    log,
+                    tick_log,
                     task_key=task_key,
                     exchange=exchange,
-                    scheduled_for=tick.scheduled_for,
                     reason="duplicate_task",
                 )
 
@@ -126,10 +122,8 @@ async def _enqueue_live_funding_tick(
         duplicate_tasks=duplicate_tasks,
         stale_failed_tasks=len(stale_tasks),
     )
-    log.info(
+    tick_log.info(
         "live_enqueue_completed",
-        pipeline=LIVE_FUNDING_PIPELINE,
-        scheduled_for=to_iso8601(tick.scheduled_for),
         selected_exchanges=result.selected_exchanges,
         created_tasks=result.created_tasks,
         skipped_active_tasks=result.skipped_active_tasks,
@@ -146,18 +140,15 @@ def build_live_funding_task_key(exchange: str, scheduled_for: UtcDateTime) -> st
 
 
 def _log_task_skipped(
-    log: EventLogger,
+    tick_log: EventLogger,
     *,
     task_key: str,
     exchange: str,
-    scheduled_for: UtcDateTime,
     reason: str,
 ) -> None:
-    log.info(
+    tick_log.info(
         "live_task_skipped",
-        pipeline=LIVE_FUNDING_PIPELINE,
         task_key=task_key,
         exchange=exchange,
-        scheduled_for=to_iso8601(scheduled_for),
         reason=reason,
     )
