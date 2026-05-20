@@ -7,13 +7,13 @@ discovery.docker "fundingpulse" {
   host = "unix:///var/run/docker.sock"
 }
 
-discovery.relabel "fundingpulse_ingestion_logs" {
+discovery.relabel "fundingpulse_tracker_logs" {
   targets = discovery.docker.fundingpulse.targets
 
   rule {
     source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
     action        = "keep"
-    regex         = "ingestion-scheduler|ingestion-live-worker"
+    regex         = "tracker"
   }
 
   rule {
@@ -34,32 +34,25 @@ discovery.relabel "fundingpulse_ingestion_logs" {
 
   rule {
     target_label = "job"
-    replacement  = "fundingpulse/ingestion"
+    replacement  = "fundingpulse/tracker"
   }
 }
 
-loki.source.docker "fundingpulse_ingestion_logs" {
+loki.source.docker "fundingpulse_tracker_logs" {
   host       = "unix:///var/run/docker.sock"
-  targets    = discovery.relabel.fundingpulse_ingestion_logs.output
-  forward_to = [loki.process.fundingpulse_ingestion_logs.receiver]
+  targets    = discovery.relabel.fundingpulse_tracker_logs.output
+  forward_to = [loki.process.fundingpulse_tracker_logs.receiver]
 }
 
-loki.process "fundingpulse_ingestion_logs" {
+loki.process "fundingpulse_tracker_logs" {
   stage.docker {}
 
   stage.json {
     expressions = {
-      service       = "",
-      component     = "",
-      level         = "",
-      event         = "",
-      logger        = "logger",
-      pipeline      = "",
-      exchange      = "",
-      worker_id     = "",
-      task_key      = "",
-      scheduled_for = "",
-      error_type    = "",
+      service   = "",
+      component = "",
+      level     = "",
+      exchange  = "",
     }
   }
 
@@ -68,19 +61,7 @@ loki.process "fundingpulse_ingestion_logs" {
       service   = "",
       component = "",
       level     = "",
-      event     = "",
-      pipeline  = "",
       exchange  = "",
-    }
-  }
-
-  stage.structured_metadata {
-    values = {
-      logger        = "",
-      worker_id     = "",
-      task_key      = "",
-      scheduled_for = "",
-      error_type    = "",
     }
   }
 

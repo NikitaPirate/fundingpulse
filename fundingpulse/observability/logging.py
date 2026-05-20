@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Protocol, TextIO, cast
 
 import structlog
@@ -41,9 +41,14 @@ def configure_json_logging(
     component: str,
     level: int = logging.INFO,
     stream: TextIO | None = None,
+    runtime_fields: Mapping[str, object] | None = None,
 ) -> None:
     """Configure stdlib and structlog to emit JSON application logs."""
-    runtime_context = _add_runtime_context(service=service, component=component)
+    runtime_context = _add_runtime_context(
+        service=service,
+        component=component,
+        runtime_fields=runtime_fields,
+    )
     shared_processors: list[Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_logger_name,
@@ -82,13 +87,21 @@ def configure_json_logging(
     root_logger.setLevel(level)
 
 
-def _add_runtime_context(*, service: str, component: str) -> Processor:
+def _add_runtime_context(
+    *,
+    service: str,
+    component: str,
+    runtime_fields: Mapping[str, object] | None = None,
+) -> Processor:
+    extra_fields = dict(runtime_fields or {})
+
     def add_runtime_context(
         logger: WrappedLogger,
         method_name: str,
         event_dict: EventDict,
     ) -> EventDict:
         del logger, method_name
+        event_dict.update(extra_fields)
         event_dict["service"] = service
         event_dict["component"] = component
         return event_dict

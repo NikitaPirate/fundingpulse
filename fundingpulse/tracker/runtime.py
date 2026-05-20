@@ -23,7 +23,6 @@ class RuntimeConfig:
     debug_exchanges_live: str | None
     instance_id: int
     total_instances: int
-    live_jobs_enabled: bool
 
 
 def build_runtime_config(
@@ -79,7 +78,6 @@ def build_runtime_config(
         debug_exchanges_live=debug_exchanges_live_arg,
         instance_id=instance_id,
         total_instances=total_instances,
-        live_jobs_enabled=app.live_jobs_enabled,
     )
 
 

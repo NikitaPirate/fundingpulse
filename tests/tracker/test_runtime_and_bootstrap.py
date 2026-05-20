@@ -46,7 +46,6 @@ def test_build_runtime_config_merges_db_runtime_overrides() -> None:
     assert config.db.engine_kwargs["pool_size"] == 99
     assert config.db.engine_kwargs["pool_pre_ping"] is True
     assert config.db.session_kwargs == {"expire_on_commit": False}
-    assert config.live_jobs_enabled is False
 
 
 def test_build_runtime_config_rejects_unknown_enabled_exchange() -> None:
@@ -155,7 +154,7 @@ async def test_bootstrap_uses_provided_session_factory() -> None:
 
 
 @pytest.mark.asyncio
-async def test_bootstrap_can_skip_tracker_live_jobs(
+async def test_bootstrap_registers_tracker_live_jobs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def ensure_sections(_: SessionFactory, __: list[str]) -> None:
@@ -167,9 +166,8 @@ async def test_bootstrap_can_skip_tracker_live_jobs(
     scheduler = await bootstrap(
         session_factory=session_factory,
         exchanges=["bybit"],
-        live_jobs_enabled=False,
     )
 
     jobs = {job.name for job in scheduler.get_jobs()}
     assert "bybit_update" in jobs
-    assert "bybit_live" not in jobs
+    assert "bybit_live" in jobs

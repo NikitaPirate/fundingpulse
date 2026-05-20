@@ -27,7 +27,6 @@ async def bootstrap(
     exchanges: list[str] | None = None,
     concurrency_limit: int = 10,
     mv_refresher_debounce: int = 10,
-    live_jobs_enabled: bool = False,
 ) -> AsyncIOScheduler:
     """Build and return configured scheduler."""
     resolved_exchanges = _resolve_exchanges(exchanges)
@@ -44,7 +43,6 @@ async def bootstrap(
         session_factory=session_factory,
         mv_refresher=mv_refresher,
         concurrency_limit=concurrency_limit,
-        live_jobs_enabled=live_jobs_enabled,
     )
     _register_service_jobs(
         scheduler=scheduler,
@@ -119,7 +117,6 @@ def _register_exchange_jobs(
     session_factory: SessionFactory,
     mv_refresher: MaterializedViewRefresher,
     concurrency_limit: int,
-    live_jobs_enabled: bool,
 ) -> None:
     """Register update and live jobs for each exchange."""
     if not exchange_names:
@@ -140,12 +137,8 @@ def _register_exchange_jobs(
             mv_refresher=mv_refresher,
         )
         _register_update_job(scheduler, exchange_name, orchestrator)
-
-        if live_jobs_enabled:
-            second = index * seconds_per_exchange
-            _register_live_job(scheduler, exchange_name, second, orchestrator)
-        else:
-            logger.info("Skipped live rate collection for %s (disabled)", exchange_name)
+        second = index * seconds_per_exchange
+        _register_live_job(scheduler, exchange_name, second, orchestrator)
 
 
 def _register_update_job(

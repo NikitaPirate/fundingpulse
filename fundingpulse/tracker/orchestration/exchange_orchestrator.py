@@ -75,5 +75,4 @@ class ExchangeOrchestrator:
             adapter=self._adapter,
             section_name=self._section_name,
             db=self._db,
-            logger=self._logger,
         )

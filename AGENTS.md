@@ -6,8 +6,8 @@ Crypto perpetual futures funding rate tracker. Collects historical and live fund
 
 Python services sharing a domain model, plus a Next.js frontend. Each has its own AGENTS.md with detailed context:
 
-- **tracker** (`fundingpulse/tracker/AGENTS.md`) — long-running scheduler. Registers contracts, syncs historical funding, refreshes materialized views, and can still run legacy live collection outside ingestion cutover. Entry: `funding-tracker` CLI.
-- **ingestion** (`fundingpulse/ingestion/`) — task-based data pipeline runtime. Live funding ingestion runs through one scheduler process plus live worker processes. Entries: `funding-ingestion-scheduler`, `funding-ingestion-live-worker`.
+- **tracker** (`fundingpulse/tracker/AGENTS.md`) — long-running scheduler. Registers contracts, syncs historical funding, collects live funding snapshots, and refreshes materialized views. Entry: `funding-tracker` CLI.
+- **ingestion** (`fundingpulse/ingestion/`) — task-based data pipeline runtime kept temporarily while tracker live collection is redeployed. Do not add new deployment paths here; cleanup is planned after stable tracker live deployment.
 - **api** (`fundingpulse/api/AGENTS.md`) — FastAPI read-only HTTP API. Serves funding data to consumers. Entry: `uvicorn fundingpulse.api.main:app`.
 - **models** (`fundingpulse/models/AGENTS.md`) — shared SQLModel domain models used by both services.
 - **migrations** (`fundingpulse/migrations/`) — Alembic migrations (TimescaleDB-aware). Numbered sequentially: `001_`, `002_`, etc.
@@ -75,7 +75,6 @@ Single `.env` at the repo root. One loader, one rule for naming.
 | `FI_LIVE_*` | ingestion | Live ingestion scheduler/worker runtime knobs. |
 | `FI_DB_*` | ingestion | SQLAlchemy engine/session tuning specific to ingestion processes. |
 | `FT_INSTANCE_COUNT` | deploy | Read by supervisord only — fan-out factor for tracker processes. Not a Python setting. |
-| `LIVE_INGESTION_WORKER_COUNT` | deploy | Read by supervisord only — fan-out factor for live ingestion worker processes. Not a Python setting. |
 | `API_PORT` | deploy | Compose host-side port mapping. Not a Python setting. |
 
 Rule: if a value is shared across services → no service prefix. If it's owned by one service → service prefix (`FDA_` / `FT_` / `FI_`). Subsystems inside a service get a sub-prefix (`FDA_DB_`, `FDA_CORS_`, `FT_DB_`, `FI_LIVE_`, `FI_DB_`).
@@ -84,4 +83,4 @@ Rule: if a value is shared across services → no service prefix. If it's owned 
 
 ## Deploy
 
-Docker Compose in the repo root; Dockerfiles and supervisord config live in `deploy/`. Backend services are timescaledb, db-migrate, tracker, ingestion-scheduler, ingestion-live-worker, and api. Tracker supports multi-instance sharding via `FT_INSTANCE_ID` / `FT_TOTAL_INSTANCES`, while deploy fan-out uses `FT_INSTANCE_COUNT`. Live ingestion workers fan out inside the worker container via `LIVE_INGESTION_WORKER_COUNT`.
+Docker Compose in the repo root; Dockerfiles and supervisord config live in `deploy/`. Backend services are timescaledb, db-migrate, tracker, and api. Tracker supports multi-instance sharding via `FT_INSTANCE_ID` / `FT_TOTAL_INSTANCES`, while deploy fan-out uses `FT_INSTANCE_COUNT`.

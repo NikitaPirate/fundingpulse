@@ -71,6 +71,28 @@ def test_bound_context_is_rendered_as_top_level_fields(
     assert payload["component"] == "scheduler"
 
 
+def test_runtime_fields_are_rendered_as_top_level_fields(
+    restore_logging: None,
+) -> None:
+    del restore_logging
+    stream = io.StringIO()
+    configure_json_logging(
+        service="tracker",
+        component="scheduler",
+        stream=stream,
+        runtime_fields={"instance_id": 2, "total_instances": 4},
+    )
+
+    get_logger("fundingpulse.tracker.main").info("tracker_started")
+
+    payload = _last_payload(stream)
+    assert payload["event"] == "tracker_started"
+    assert payload["service"] == "tracker"
+    assert payload["component"] == "scheduler"
+    assert payload["instance_id"] == 2
+    assert payload["total_instances"] == 4
+
+
 def test_configure_json_logging_renders_stdlib_logs_as_json(
     restore_logging: None,
 ) -> None:

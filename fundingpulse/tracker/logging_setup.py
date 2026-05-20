@@ -4,30 +4,27 @@ from __future__ import annotations
 
 import logging
 
+from fundingpulse.observability.logging import configure_json_logging
+
 logger = logging.getLogger(__name__)
 
 
 def configure_logging(instance_id: int, total_instances: int) -> None:
-    """Configure base logging and optional instance tagging."""
-    logging.basicConfig(
+    """Configure JSON process logging and optional instance context."""
+    runtime_fields = (
+        {"instance_id": instance_id, "total_instances": total_instances}
+        if total_instances > 1
+        else None
+    )
+    configure_json_logging(
+        service="tracker",
+        component="tracker",
         level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler()],
+        runtime_fields=runtime_fields,
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("apscheduler").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
-
-    if total_instances <= 1:
-        return
-
-    for handler in logging.root.handlers:
-        assert handler.formatter is not None
-        base_format: str = handler.formatter._fmt  # type: ignore[assignment]
-        tagged_format = base_format.replace(
-            "%(levelname)s", f"%(levelname)s [{instance_id}/{total_instances}]"
-        )
-        handler.setFormatter(logging.Formatter(tagged_format))
 
 
 def configure_exchange_debug_logging(exchanges_spec: str | None) -> None:

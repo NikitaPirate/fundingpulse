@@ -55,39 +55,6 @@ services:
       db-migrate:
         condition: service_completed_successfully
 
-  ingestion-scheduler:
-    <<: *app-env
-    build:
-      context: .
-      dockerfile: deploy/backend.Dockerfile
-      target: ingestion-scheduler
-    container_name: fundingpulse-ingestion-scheduler
-    restart: unless-stopped
-    environment:
-      DB_HOST: timescaledb
-    networks:
-      - funding
-    depends_on:
-      db-migrate:
-        condition: service_completed_successfully
-
-  ingestion-live-worker:
-    <<: *app-env
-    build:
-      context: .
-      dockerfile: deploy/backend.Dockerfile
-      target: ingestion-live-worker
-    container_name: fundingpulse-ingestion-live-worker
-    restart: unless-stopped
-    environment:
-      DB_HOST: timescaledb
-      LIVE_INGESTION_WORKER_COUNT: ${LIVE_INGESTION_WORKER_COUNT:-3}
-    networks:
-      - funding
-    depends_on:
-      db-migrate:
-        condition: service_completed_successfully
-
   api:
     <<: *app-env
     build:

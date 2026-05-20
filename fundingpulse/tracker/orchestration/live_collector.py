@@ -12,12 +12,26 @@ critical path, not live sampling.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from time import monotonic
+
 from fundingpulse.db import SessionFactory
 from fundingpulse.models.live_funding_point import LiveFundingPoint
+from fundingpulse.observability.logging import EventLogger, get_logger
 from fundingpulse.tracker.exchanges.base import BaseExchange
-from fundingpulse.tracker.orchestration.section_logger import SectionLogger
 from fundingpulse.tracker.queries.contracts import get_active_by_section
-from fundingpulse.tracker.queries.utils import bulk_insert
+from fundingpulse.tracker.queries.live_funding_points import insert_live_funding_points
+
+logger = get_logger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class LiveCollectionResult:
+    """Observable outcome of one tracker live funding collection."""
+
+    expected_contracts: int
+    received_rates: int
+    written_points: int
 
 
 async def collect_live(
@@ -25,21 +39,46 @@ async def collect_live(
     adapter: BaseExchange,
     section_name: str,
     db: SessionFactory,
-    logger: SectionLogger,
-) -> None:
+    event_logger: EventLogger | None = None,
+) -> LiveCollectionResult:
     """Fetch live rates for all active contracts and persist the snapshot."""
+    log = (event_logger or logger).bind(exchange=section_name)
+    started_at = monotonic()
+    expected_contracts = 0
+    received_rates = 0
+    written_points = 0
+
+    log.info("live_collection_started")
+
     try:
         async with db() as session:
             contracts = list(await get_active_by_section(session, section_name))
+        expected_contracts = len(contracts)
         if not contracts:
-            logger.warning("No active contracts for live collection")
-            return
+            result = LiveCollectionResult(
+                expected_contracts=0,
+                received_rates=0,
+                written_points=0,
+            )
+            log.info(
+                "live_collection_completed",
+                expected_contracts=result.expected_contracts,
+                received_rates=result.received_rates,
+                written_points=result.written_points,
+                duration_seconds=monotonic() - started_at,
+            )
+            return result
 
-        logger.debug("Collecting live rates for %d contracts", len(contracts))
+        log.info("live_fetch_started", expected_contracts=expected_contracts)
+        fetch_started_at = monotonic()
         rates = await adapter.fetch_live(contracts)
-        if not rates:
-            logger.warning("No live rates collected")
-            return
+        received_rates = len(rates)
+        log.info(
+            "live_fetch_completed",
+            expected_contracts=expected_contracts,
+            received_rates=received_rates,
+            fetch_duration_seconds=monotonic() - fetch_started_at,
+        )
 
         records = [
             LiveFundingPoint(
@@ -50,17 +89,45 @@ async def collect_live(
             for contract_id, rate in rates.items()
         ]
 
+        persist_started_at = monotonic()
         async with db.begin() as session:
-            await bulk_insert(session, LiveFundingPoint, records, on_conflict="ignore")
+            written_points = await insert_live_funding_points(session, records)
 
-        _log_outcome(logger, success=len(records), expected=len(contracts))
-    except Exception as e:
-        logger.error("Failed to collect live rates: %s", e, exc_info=True)
+        log.info(
+            "live_persist_completed",
+            expected_contracts=expected_contracts,
+            received_rates=received_rates,
+            attempted_points=len(records),
+            written_points=written_points,
+            persist_duration_seconds=monotonic() - persist_started_at,
+        )
 
-
-def _log_outcome(logger: SectionLogger, *, success: int, expected: int) -> None:
-    failed = expected - success
-    if failed:
-        logger.info("Live collection: %d ok, %d failed", success, failed)
-    else:
-        logger.debug("Live collection: all %d rates collected", success)
+        result = LiveCollectionResult(
+            expected_contracts=expected_contracts,
+            received_rates=received_rates,
+            written_points=written_points,
+        )
+        log.info(
+            "live_collection_completed",
+            expected_contracts=result.expected_contracts,
+            received_rates=result.received_rates,
+            written_points=result.written_points,
+            duration_seconds=monotonic() - started_at,
+        )
+        return result
+    except Exception as exc:
+        log.exception(
+            "live_collection_failed",
+            expected_contracts=expected_contracts,
+            received_rates=received_rates,
+            written_points=written_points,
+            duration_seconds=monotonic() - started_at,
+            error_type=type(exc).__name__,
+            error_message=str(exc),
+            exc_info=exc,
+        )
+        return LiveCollectionResult(
+            expected_contracts=expected_contracts,
+            received_rates=received_rates,
+            written_points=written_points,
+        )

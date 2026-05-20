@@ -17,13 +17,13 @@ main.py → DB runtime scope → bootstrap.py → ExchangeOrchestrator (per exch
 
 **main.py** — owns the top-level DB runtime scope and shared HTTP client, then hands a ready `SessionFactory` to bootstrap.
 
-**bootstrap.py** — wires everything: resolves exchanges, seeds the `section` rows once, creates APScheduler, registers jobs around the provided `SessionFactory`. Each exchange gets `{exchange}_update` (hourly). The legacy `{exchange}_live` minute job is registered only when `FT_LIVE_JOBS_ENABLED=true`; deployment disables it after live ingestion cutover.
+**bootstrap.py** — wires everything: resolves exchanges, seeds the `section` rows once, creates APScheduler, registers jobs around the provided `SessionFactory`. Each exchange gets `{exchange}_update` (hourly) and `{exchange}_live` (minute cadence, staggered by second across exchanges).
 
 **orchestration/** — four siblings that split the per-exchange workflow:
 - `exchange_orchestrator.py` — thin facade with `update()` / `update_live()` scheduler entry points. Bundles dependencies (adapter, DB, MV refresher, logger), delegates to the modules below, and logs cycle duration.
 - `contract_registry.py` — `register_contracts()`: fetches exchange contracts, ensures assets/quotes, computes an explicit reconciliation plan (`added`, `deprecated`, `reactivated`, `interval_changes`) from ORM `Contract` rows, applies rare lifecycle changes through ORM mutation inside the session, creates history-state rows, and signals the MV refresher only when contracts changed.
 - `history_sync.py` — `run_history_updates()` / `process_contracts()`: loads active `ContractWithHistoryState` projections (`Contract` + `ContractHistoryState`), runs a per-contract task that either backfills (`_sync`, backward pagination until empty) or incrementally extends (`_update`, forward fetch gated by `funding_interval`). Both paths persist via `persist_batch()`, which relies on `update_bounds`' SQL-level `LEAST`/`GREATEST` merge. Sync timeout is 10 min, update is 1 min.
-- `live_collector.py` — `collect_live()`: fetches live rates, inserts a snapshot, logs success/failure. Errors are logged and swallowed (minute cadence must not stall).
+- `live_collector.py` — `collect_live()`: fetches live rates, inserts a snapshot, returns `LiveCollectionResult`, and emits structured events with fetch/persist counts and durations. Errors are logged and swallowed (minute cadence must not stall).
 - `section_logger.py` — `LoggerAdapter` that prepends `[section]` to every record; centralises the prefix that was duplicated across the layer.
 
 **MaterializedViewRefresher** — debounced (10s default) refresh of `contract_enriched` materialized view. Triggered when contracts change, checked every second by scheduler.

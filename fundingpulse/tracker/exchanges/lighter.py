@@ -7,6 +7,8 @@ _FETCH_STEP = 498 hours (500 - 2 safety buffer).
 import asyncio
 import json
 import logging
+from typing import Any
+from uuid import UUID
 
 import websockets
 
@@ -35,19 +37,37 @@ class LighterExchange(BaseExchange):
     def _format_symbol(self, contract: Contract) -> str:
         return str(self._asset_to_id[contract.asset_name])
 
-    async def get_contracts(self) -> list[ExchangeContractListing]:
+    async def _fetch_order_books(self) -> list[dict[str, Any]]:
         response = await self._api_get(f"{self.API_ENDPOINT}/orderBooks")
 
         assert isinstance(response, dict)
 
-        contracts = []
-        asset_to_id = {}
+        return [
+            market
+            for market in response.get("order_books", [])
+            if market.get("market_type") == "perp"
+        ]
 
-        for market in response.get("order_books", []):
-            if market.get("market_type") != "perp":
-                continue
+    async def _refresh_asset_to_id(self) -> None:
+        markets = await self._fetch_order_books()
+        self._asset_to_id = {market["symbol"]: int(market["market_id"]) for market in markets}
+
+    async def _ensure_asset_to_id(self, contracts: list[Contract]) -> None:
+        if any(contract.asset_name not in self._asset_to_id for contract in contracts):
+            await self._refresh_asset_to_id()
+
+    def _has_unknown_market_ids(self, rates: dict[str, FundingPoint]) -> bool:
+        known_market_ids = {str(market_id) for market_id in self._asset_to_id.values()}
+        return any(market_id not in known_market_ids for market_id in rates)
+
+    async def get_contracts(self) -> list[ExchangeContractListing]:
+        markets = await self._fetch_order_books()
+        contracts = []
+        asset_to_id: dict[str, int] = {}
+
+        for market in markets:
             asset_name = market["symbol"]
-            asset_to_id[asset_name] = market["market_id"]
+            asset_to_id[asset_name] = int(market["market_id"])
             contracts.append(
                 ExchangeContractListing(
                     asset_name=asset_name,
@@ -63,6 +83,7 @@ class LighterExchange(BaseExchange):
     async def _fetch_history(
         self, contract: Contract, start_ms: int, end_ms: int
     ) -> list[FundingPoint]:
+        await self._ensure_asset_to_id([contract])
         symbol = self._format_symbol(contract)
 
         response = await self._api_get(
@@ -103,4 +124,22 @@ class LighterExchange(BaseExchange):
             )
             for market_id, payload in data.get("market_stats", {}).items()
             if payload.get("current_funding_rate") is not None
+        }
+
+    async def fetch_live(self, contracts: list[Contract]) -> dict[UUID, FundingPoint]:
+        all_rates = await self._fetch_live_batch()
+        if self._has_unknown_market_ids(all_rates):
+            await self._refresh_asset_to_id()
+        else:
+            await self._ensure_asset_to_id(contracts)
+
+        symbol_to_contract = {
+            self._format_symbol(contract): contract
+            for contract in contracts
+            if contract.asset_name in self._asset_to_id
+        }
+        return {
+            symbol_to_contract[symbol].id: rate
+            for symbol, rate in all_rates.items()
+            if symbol in symbol_to_contract
         }

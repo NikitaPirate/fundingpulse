@@ -113,8 +113,6 @@ Run the backend services:
 
 ```bash
 uv run funding-tracker
-uv run funding-ingestion-scheduler
-uv run funding-ingestion-live-worker --worker-id local-worker-1
 uv run uvicorn fundingpulse.api.main:app
 ```
 
@@ -124,7 +122,7 @@ Run the frontend:
 npm run frontend:dev
 ```
 
-Run the observability stack for ingestion logs:
+Run the observability stack for tracker logs:
 
 ```bash
 docker compose up -d loki alloy grafana
@@ -144,8 +142,6 @@ npm run frontend:dev:mock
 | Purpose | Command |
 | --- | --- |
 | Run one exchange | `uv run funding-tracker --exchanges bybit` |
-| Run live ingestion scheduler | `uv run funding-ingestion-scheduler` |
-| Run one live ingestion worker | `uv run funding-ingestion-live-worker --worker-id local-worker-1` |
 | Verify one adapter | `uv run verify hyperliquid` |
 | Run backend tests | `uv run pytest` |
 | Sync frontend API types | `npm run contract:sync` |
@@ -155,9 +151,9 @@ npm run frontend:dev:mock
 ## Project Map
 
 - [Tracker](fundingpulse/tracker/README.md) - contract registration, exchange
-  adapters, historical backfill, checkpoint recovery model.
+  adapters, historical backfill, live snapshots, checkpoint recovery model.
 - [Ingestion](fundingpulse/ingestion/README.md) - task-based live funding
-  pipeline, scheduler/worker runtime, queue semantics, deployment shape.
+  runtime kept temporarily until tracker live deployment is stable.
 - [API](fundingpulse/api/README.md) - read boundary, endpoint groups, rate
   normalization, OpenAPI contract.
 - [Frontend](frontend/README.md) - typed consumer, product views, mock mode,
