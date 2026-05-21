@@ -14,6 +14,7 @@ from fundingpulse.testing.helpers.data_helpers import create_contract
 from fundingpulse.time import UtcDateTime, utc_now
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
+from fundingpulse.tracker.orchestration.exchange_orchestrator import ExchangeOrchestrator
 from fundingpulse.tracker.orchestration.history_sync import process_contracts
 from fundingpulse.tracker.orchestration.section_logger import make_section_logger
 from fundingpulse.tracker.queries.contracts import (
@@ -64,6 +65,11 @@ class _FakeExchange(BaseExchange):
         if not self.after_responses:
             raise AssertionError("Unexpected fetch_history_after call")
         return self.after_responses.pop(0)
+
+
+class _RegistryFailingExchange(_FakeExchange):
+    async def get_contracts(self) -> list[ExchangeContractListing]:
+        raise AssertionError("contract registry should not run from update")
 
 
 def _session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
@@ -288,3 +294,44 @@ async def test_empty_sync_response_with_existing_bounds_marks_history_synced(
     assert results == [(0, 0)]
     assert exchange.before_calls == [timestamp - timedelta(seconds=1)]
     assert state.history_synced is True
+
+
+@pytest.mark.asyncio
+async def test_update_runs_history_without_contract_registry(
+    db_session: AsyncSession,
+    engine: AsyncEngine,
+) -> None:
+    contract = await create_contract(
+        db_session,
+        asset_name="DOGE",
+        section_name=_FakeExchange.EXCHANGE_ID,
+        quote_name="USDT",
+        funding_interval=8,
+    )
+    newest = utc_now() - timedelta(hours=12)
+    point = FundingPoint(rate=0.004, timestamp=utc_now() - timedelta(hours=1))
+    await _set_state(
+        db_session,
+        contract,
+        history_synced=True,
+        oldest_timestamp=newest - timedelta(days=10),
+        newest_timestamp=newest,
+    )
+    exchange = _RegistryFailingExchange(after_responses=[[point]])
+    orchestrator = ExchangeOrchestrator(
+        exchange_adapter=exchange,
+        section_name=_FakeExchange.EXCHANGE_ID,
+        db=_session_factory(engine),
+    )
+
+    await orchestrator.update()
+    record = (
+        await db_session.execute(
+            select(HistoricalFundingPoint).where(
+                col(HistoricalFundingPoint.contract_id) == contract.id
+            )
+        )
+    ).scalar_one()
+
+    assert exchange.after_calls == [newest + timedelta(seconds=1)]
+    assert record.timestamp == point.timestamp

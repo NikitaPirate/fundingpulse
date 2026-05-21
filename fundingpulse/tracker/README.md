@@ -14,7 +14,7 @@ The tracker treats those cases as normal operating conditions.
 ```mermaid
 flowchart TD
     Start["Scheduler cycle"]
-    Register["Register current contracts"]
+    Registry["Contract registry<br/>instance 0, every 5 minutes"]
     ForEach["Process active contracts"]
     State{"History synced?"}
     Sync["Backfill history<br/>backward pagination"]
@@ -23,7 +23,8 @@ flowchart TD
     Skip["Skip until next interval"]
     Live["Live collection<br/>every minute"]
 
-    Start --> Register --> ForEach --> State
+    Start --> Registry
+    Start --> ForEach --> State
     State -- "no" --> Sync
     State -- "yes" --> UpdateGate
     UpdateGate -- "yes" --> Update
@@ -38,7 +39,9 @@ scope.
 In production, tracker processes can be fanned out through supervisord. The
 deployment reads `FT_INSTANCE_COUNT`, starts that many `funding-tracker`
 processes, and passes `--instance-id` / `--total-instances` to each one. Each
-instance then handles a deterministic shard of the exchange registry.
+instance then handles a deterministic shard of history and live collection.
+Instance 0 owns singleton maintenance jobs: contract registry for all selected
+exchanges, materialized-view refresh checks, and asset ranking updates.
 
 ## Exchange Adapter Boundary
 
@@ -54,16 +57,19 @@ mapping used by the CLI and scheduler bootstrap.
 
 ## Contract Registration
 
-Every update cycle starts by asking the exchange for its current contract list.
-That list is reconciled with existing `Contract` rows:
+Contract registration runs as a separate maintenance job on instance 0. It asks
+each selected exchange for its current contract list on startup and then every
+five minutes at minutes 4, 9, ..., 59. That list is reconciled with existing
+`Contract` rows:
 
 - new contracts are inserted;
 - missing contracts are marked deprecated;
 - reappeared contracts are reactivated;
 - funding interval changes are applied explicitly.
 
-This step is not a separate maintenance job because live collection and history
-sync both depend on an accurate contract set.
+Live collection and history sync read the shared database state. If registry has
+not populated a section yet, those jobs skip empty contract sets and pick them up
+on a later run.
 
 ## Historical Sync
 

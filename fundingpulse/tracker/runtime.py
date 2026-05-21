@@ -19,6 +19,8 @@ class RuntimeConfig:
 
     db: DBRuntimeConfig
     exchanges: list[str] | None
+    registry_exchanges: list[str]
+    owns_singleton_jobs: bool
     debug_exchanges: str | None
     debug_exchanges_live: str | None
     instance_id: int
@@ -56,12 +58,15 @@ def build_runtime_config(
     if instance_id >= total_instances:
         raise ValueError("FT_INSTANCE_ID must be less than FT_TOTAL_INSTANCES")
 
-    exchanges = resolve_enabled_exchanges(
+    selected_exchanges = resolve_enabled_exchanges(
         exchanges_arg,
         all_exchanges,
         source=exchanges_source,
     )
+    registry_exchanges = selected_exchanges if instance_id == 0 else []
+    owns_singleton_jobs = instance_id == 0
 
+    exchanges: list[str] | None = selected_exchanges
     if total_instances > 1:
         exchanges = _filter_exchanges_by_instance(exchanges, instance_id, total_instances)
     elif len(exchanges) == len(all_exchanges):
@@ -74,6 +79,8 @@ def build_runtime_config(
             session_kwargs=settings.db_tuning.session_kwargs,
         ),
         exchanges=exchanges,
+        registry_exchanges=registry_exchanges,
+        owns_singleton_jobs=owns_singleton_jobs,
         debug_exchanges=debug_exchanges_arg,
         debug_exchanges_live=debug_exchanges_live_arg,
         instance_id=instance_id,

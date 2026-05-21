@@ -1,16 +1,16 @@
 """Orchestration layer for funding tracker.
 
-Provides ExchangeOrchestrator — the complete workflow for exchange data
-collection: contract registration, historical data sync/update, and live
-rate collection.
+Provides ExchangeOrchestrator — the scheduler-facing workflow for sharded
+exchange data collection: historical data sync/update and live rate collection.
+Contract registration is a separate singleton maintenance job.
 
-The orchestration layer sits between the scheduler and exchange adapters:
+The sharded orchestration layer sits between the scheduler and exchange adapters:
 - Scheduler calls simple methods: update(), update_live()
 - Orchestrator handles all workflow logic internally
 
 Example:
     orchestrator = ExchangeOrchestrator(...)
-    await orchestrator.update()        # Register contracts + sync/update history
+    await orchestrator.update()        # Sync/update history
     await orchestrator.update_live()   # Collect live funding rates
 """
 

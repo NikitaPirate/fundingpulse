@@ -27,14 +27,23 @@ HTTP_CONNECTIONS_PER_EXCHANGE = 100
 async def run_scheduler(
     db: DBRuntimeConfig,
     exchanges: list[str] | None,
+    registry_exchanges: list[str],
+    owns_singleton_jobs: bool,
 ) -> None:
     """Bootstrap and run scheduler forever."""
     async with db_session_factory_scope(db) as session_factory:
-        await http_client.startup(max_connections=_http_max_connections_for_exchanges(exchanges))
+        await http_client.startup(
+            max_connections=_http_max_connections_for_exchanges(
+                exchanges,
+                registry_exchanges,
+            )
+        )
         try:
             scheduler = await bootstrap(
                 session_factory=session_factory,
                 exchanges=exchanges,
+                registry_exchanges=registry_exchanges,
+                owns_singleton_jobs=owns_singleton_jobs,
             )
             scheduler.start()
             logger.info("Scheduler started, waiting for jobs...")
@@ -43,8 +52,16 @@ async def run_scheduler(
             await http_client.shutdown()
 
 
-def _http_max_connections_for_exchanges(exchanges: list[str] | None) -> int:
-    exchange_count = len(EXCHANGES) if exchanges is None else len(exchanges)
+def _http_max_connections_for_exchanges(
+    exchanges: list[str] | None,
+    registry_exchanges: list[str] | None = None,
+) -> int:
+    connection_exchanges = set(registry_exchanges or [])
+    if exchanges is None:
+        connection_exchanges.update(EXCHANGES)
+    else:
+        connection_exchanges.update(exchanges)
+    exchange_count = len(connection_exchanges)
     return max(1, exchange_count) * HTTP_CONNECTIONS_PER_EXCHANGE
 
 
@@ -70,6 +87,13 @@ def main() -> None:
             len(config.exchanges or []),
             config.exchanges or [],
         )
+        logger.info(
+            "Instance %s/%s: singleton jobs %s, registry exchange(s): %s",
+            config.instance_id,
+            config.total_instances,
+            "enabled" if config.owns_singleton_jobs else "disabled",
+            config.registry_exchanges,
+        )
     elif config.exchanges:
         logger.info(
             "Starting funding tracker with %s exchange(s): %s",
@@ -84,6 +108,8 @@ def main() -> None:
             run_scheduler(
                 config.db,
                 config.exchanges,
+                config.registry_exchanges,
+                config.owns_singleton_jobs,
             )
         )
     except KeyboardInterrupt:

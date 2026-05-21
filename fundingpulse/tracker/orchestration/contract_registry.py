@@ -1,8 +1,8 @@
 """Reconcile the exchange's published contract list with the database.
 
-Runs once per exchange per update cycle, before history processing. Ensures
-that every asset/quote referenced by the exchange exists as a row, then
-applies explicit contract lifecycle changes: add, deprecate, reactivate, and
+Runs as a singleton maintenance job, separate from history processing. Ensures
+that every asset/quote referenced by the exchange exists as a row, then applies
+explicit contract lifecycle changes: add, deprecate, reactivate, and
 funding-interval update.
 
 The materialized view that powers the public API depends on the contract
@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from time import monotonic
 from typing import Protocol
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,14 +22,17 @@ from fundingpulse.db import SessionFactory
 from fundingpulse.models.asset import Asset
 from fundingpulse.models.contract import Contract
 from fundingpulse.models.quote import Quote
+from fundingpulse.observability.logging import EventLogger, get_logger
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ExchangeContractListing
-from fundingpulse.tracker.orchestration.section_logger import SectionLogger
+from fundingpulse.tracker.orchestration.section_logger import SectionLogger, make_section_logger
 from fundingpulse.tracker.queries import contract_history_state
 from fundingpulse.tracker.queries import contracts as contract_queries
 from fundingpulse.tracker.queries.utils import bulk_insert
 
 ContractKey = tuple[str, str]
+
+_event_logger = get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,8 +53,61 @@ class ReconciliationPlan:
         return bool(self.added or self.deprecated or self.reactivated or self.interval_changes)
 
 
+@dataclass(frozen=True, slots=True)
+class ContractRegistryResult:
+    feed_contracts: int = 0
+    added_contracts: int = 0
+    deprecated_contracts: int = 0
+    reactivated_contracts: int = 0
+    interval_changes: int = 0
+    mv_refresh_signaled: bool = False
+
+
 class ContractChangeNotifier(Protocol):
     def signal_contracts_changed(self, exchange_name: str) -> None: ...
+
+
+async def run_contract_registry(
+    *,
+    adapter: BaseExchange,
+    section_name: str,
+    db: SessionFactory,
+    mv_refresher: ContractChangeNotifier,
+    event_logger: EventLogger | None = None,
+) -> ContractRegistryResult:
+    """Scheduler-facing contract registry job with structured observability."""
+    log = (event_logger or _event_logger).bind(exchange=section_name)
+    section_logger = make_section_logger(__name__, section_name)
+    started_at = monotonic()
+
+    log.info("contract_registry_started")
+
+    try:
+        result = await register_contracts(
+            adapter=adapter,
+            section_name=section_name,
+            db=db,
+            mv_refresher=mv_refresher,
+            logger=section_logger,
+        )
+    except Exception as exc:
+        result = ContractRegistryResult()
+        log.exception(
+            "contract_registry_failed",
+            **_result_fields(result),
+            duration_seconds=monotonic() - started_at,
+            error_type=type(exc).__name__,
+            error_message=str(exc),
+            exc_info=exc,
+        )
+        return result
+
+    log.info(
+        "contract_registry_completed",
+        **_result_fields(result),
+        duration_seconds=monotonic() - started_at,
+    )
+    return result
 
 
 async def register_contracts(
@@ -60,7 +117,7 @@ async def register_contracts(
     db: SessionFactory,
     mv_refresher: ContractChangeNotifier,
     logger: SectionLogger,
-) -> None:
+) -> ContractRegistryResult:
     """Sync contract list from exchange API to DB.
 
     Raises any underlying exception — the caller decides whether a failed
@@ -73,7 +130,7 @@ async def register_contracts(
 
     if not exchange_listings:
         logger.warning("No contract listings returned from API")
-        return
+        return ContractRegistryResult()
 
     async with db.begin() as session:
         await _ensure_quotes_and_assets(session, exchange_listings, logger)
@@ -98,6 +155,26 @@ async def register_contracts(
         logger.debug("Signaled MV refresher")
     else:
         logger.debug("No contract changes detected; MV refresh not signaled")
+
+    return ContractRegistryResult(
+        feed_contracts=len(exchange_listings),
+        added_contracts=len(plan.added),
+        deprecated_contracts=len(plan.deprecated),
+        reactivated_contracts=len(plan.reactivated),
+        interval_changes=len(plan.interval_changes),
+        mv_refresh_signaled=plan.has_changes,
+    )
+
+
+def _result_fields(result: ContractRegistryResult) -> dict[str, object]:
+    return {
+        "feed_contracts": result.feed_contracts,
+        "added_contracts": result.added_contracts,
+        "deprecated_contracts": result.deprecated_contracts,
+        "reactivated_contracts": result.reactivated_contracts,
+        "interval_changes": result.interval_changes,
+        "mv_refresh_signaled": result.mv_refresh_signaled,
+    }
 
 
 def _reconcile(

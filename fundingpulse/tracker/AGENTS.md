@@ -7,26 +7,29 @@ Scheduler-based service that collects funding rates from crypto exchanges into T
 ```
 main.py → DB runtime scope → bootstrap.py → ExchangeOrchestrator (per exchange)
                               ├── update()      — hourly + on startup
-                              │   ├── contract_registry.register_contracts  — sync contract list
                               │   └── history_sync.run_history_updates      — sync/update history
                               └── update_live() — every minute, snapshot current unsettled rates
                                   └── live_collector.collect_live
+
+                           → contract_registry.run_contract_registry
+                              — instance 0 only, all selected exchanges,
+                                immediate + minutes 4,9,...,59
 ```
 
 ## Key components
 
 **main.py** — owns the top-level DB runtime scope and shared HTTP client, then hands a ready `SessionFactory` to bootstrap.
 
-**bootstrap.py** — wires everything: resolves exchanges, seeds the `section` rows once, creates APScheduler, registers jobs around the provided `SessionFactory`. Each exchange gets `{exchange}_update` (hourly) and `{exchange}_live` (minute cadence, staggered by second across exchanges).
+**bootstrap.py** — wires everything: resolves exchanges, seeds the `section` rows once, creates APScheduler, registers jobs around the provided `SessionFactory`. Each collection exchange gets `{exchange}_update` (hourly) and `{exchange}_live` (minute cadence, staggered by second across exchanges). Instance 0 also registers `{exchange}_contract_registry` for every selected exchange plus singleton service jobs.
 
 **orchestration/** — four siblings that split the per-exchange workflow:
-- `exchange_orchestrator.py` — thin facade with `update()` / `update_live()` scheduler entry points. Bundles dependencies (adapter, DB, MV refresher, logger), delegates to the modules below, and logs cycle duration.
-- `contract_registry.py` — `register_contracts()`: fetches exchange contracts, ensures assets/quotes, computes an explicit reconciliation plan (`added`, `deprecated`, `reactivated`, `interval_changes`) from ORM `Contract` rows, applies rare lifecycle changes through ORM mutation inside the session, creates history-state rows, and signals the MV refresher only when contracts changed.
+- `exchange_orchestrator.py` — thin facade with `update()` / `update_live()` scheduler entry points. Bundles dependencies (adapter, DB, logger), delegates to the modules below, and logs cycle duration.
+- `contract_registry.py` — `run_contract_registry()` scheduler wrapper and `register_contracts()` reconciliation core. Fetches exchange contracts, ensures assets/quotes, computes an explicit reconciliation plan (`added`, `deprecated`, `reactivated`, `interval_changes`) from ORM `Contract` rows, applies rare lifecycle changes through ORM mutation inside the session, creates history-state rows, emits structured registry events, and signals the MV refresher only when contracts changed.
 - `history_sync.py` — `run_history_updates()` / `process_contracts()`: loads active `ContractWithHistoryState` projections (`Contract` + `ContractHistoryState`), runs a per-contract task that either backfills (`_sync`, backward pagination until empty) or incrementally extends (`_update`, forward fetch gated by `funding_interval`). Both paths persist via `persist_batch()`, which relies on `update_bounds`' SQL-level `LEAST`/`GREATEST` merge. Sync timeout is 10 min, update is 1 min.
 - `live_collector.py` — `collect_live()`: fetches live rates, inserts a snapshot, returns `LiveCollectionResult`, and emits structured events with fetch/persist counts and durations. Errors are logged and swallowed (minute cadence must not stall).
 - `section_logger.py` — `LoggerAdapter` that prepends `[section]` to every record; centralises the prefix that was duplicated across the layer.
 
-**MaterializedViewRefresher** — debounced (10s default) refresh of `contract_enriched` materialized view. Triggered when contracts change, checked every second by scheduler.
+**MaterializedViewRefresher** — debounced (10s default) refresh of `contract_enriched` materialized view. Triggered when contracts change, checked every second by the instance-0 singleton scheduler.
 
 ## Exchange adapters
 

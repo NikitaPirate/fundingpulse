@@ -16,6 +16,7 @@ from fundingpulse.time import UTC, utc_now
 from fundingpulse.tracker.exchanges import EXCHANGES
 from fundingpulse.tracker.materialized_view_refresher import MaterializedViewRefresher
 from fundingpulse.tracker.orchestration import ExchangeOrchestrator
+from fundingpulse.tracker.orchestration.contract_registry import run_contract_registry
 from fundingpulse.tracker.queries.utils import bulk_insert
 from fundingpulse.tracker.services.asset_ranking import update_rankings
 
@@ -25,12 +26,21 @@ logger = logging.getLogger(__name__)
 async def bootstrap(
     session_factory: SessionFactory,
     exchanges: list[str] | None = None,
+    registry_exchanges: list[str] | None = None,
+    owns_singleton_jobs: bool = True,
     concurrency_limit: int = 10,
     mv_refresher_debounce: int = 10,
 ) -> AsyncIOScheduler:
     """Build and return configured scheduler."""
     resolved_exchanges = _resolve_exchanges(exchanges)
-    await _ensure_sections(session_factory, resolved_exchanges)
+    requested_registry_exchanges = _resolve_exchanges(registry_exchanges or [])
+    resolved_registry_exchanges = requested_registry_exchanges if owns_singleton_jobs else []
+    if requested_registry_exchanges and not owns_singleton_jobs:
+        logger.info("Skipping contract registry jobs on non-owner instance")
+    await _ensure_sections(
+        session_factory,
+        sorted({*resolved_exchanges, *resolved_registry_exchanges}),
+    )
     mv_refresher = MaterializedViewRefresher(
         db=session_factory,
         debounce_seconds=mv_refresher_debounce,
@@ -41,18 +51,28 @@ async def bootstrap(
         scheduler=scheduler,
         exchange_names=resolved_exchanges,
         session_factory=session_factory,
+        concurrency_limit=concurrency_limit,
+    )
+    _register_contract_registry_jobs(
+        scheduler=scheduler,
+        exchange_names=resolved_registry_exchanges,
+        session_factory=session_factory,
         mv_refresher=mv_refresher,
         concurrency_limit=concurrency_limit,
     )
-    _register_service_jobs(
-        scheduler=scheduler,
-        mv_refresher=mv_refresher,
-        session_factory=session_factory,
-    )
+    if owns_singleton_jobs:
+        _register_service_jobs(
+            scheduler=scheduler,
+            mv_refresher=mv_refresher,
+            session_factory=session_factory,
+        )
+    else:
+        logger.info("Skipping singleton service jobs on this instance")
 
     logger.info(
-        "Bootstrap complete: %s exchange(s), %s job(s)",
+        "Bootstrap complete: %s collection exchange(s), %s registry exchange(s), %s job(s)",
         len(resolved_exchanges),
+        len(resolved_registry_exchanges),
         len(scheduler.get_jobs()),
     )
     return scheduler
@@ -115,7 +135,6 @@ def _register_exchange_jobs(
     scheduler: AsyncIOScheduler,
     exchange_names: list[str],
     session_factory: SessionFactory,
-    mv_refresher: MaterializedViewRefresher,
     concurrency_limit: int,
 ) -> None:
     """Register update and live jobs for each exchange."""
@@ -134,7 +153,6 @@ def _register_exchange_jobs(
             exchange_adapter=adapter,
             section_name=exchange_name,
             db=session_factory,
-            mv_refresher=mv_refresher,
         )
         _register_update_job(scheduler, exchange_name, orchestrator)
         second = index * seconds_per_exchange
@@ -175,6 +193,44 @@ def _register_live_job(
         exchange_name,
         second,
     )
+
+
+def _register_contract_registry_jobs(
+    scheduler: AsyncIOScheduler,
+    exchange_names: list[str],
+    session_factory: SessionFactory,
+    mv_refresher: MaterializedViewRefresher,
+    concurrency_limit: int,
+) -> None:
+    """Register contract registry jobs for singleton maintenance ownership."""
+    if not exchange_names:
+        logger.info("No contract registry jobs to register")
+        return
+
+    for exchange_name in exchange_names:
+        adapter = EXCHANGES[exchange_name](
+            semaphore=asyncio.Semaphore(concurrency_limit),
+        )
+        scheduler.add_job(
+            run_contract_registry,
+            kwargs={
+                "adapter": adapter,
+                "section_name": exchange_name,
+                "db": session_factory,
+                "mv_refresher": mv_refresher,
+            },
+            trigger=OrTrigger(
+                [
+                    DateTrigger(run_date=utc_now(), timezone=UTC),
+                    CronTrigger(minute="4-59/5", second=0, timezone=UTC),
+                ]
+            ),
+            name=f"{exchange_name}_contract_registry",
+        )
+        logger.info(
+            "Registered contract registry for %s (immediate + every 5 minutes starting at :04)",
+            exchange_name,
+        )
 
 
 def _register_service_jobs(

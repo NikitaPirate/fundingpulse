@@ -11,14 +11,17 @@ from fundingpulse.models.asset import Asset
 from fundingpulse.models.contract import Contract
 from fundingpulse.models.contract_history_state import ContractHistoryState
 from fundingpulse.models.quote import Quote
+from fundingpulse.observability.logging import EventLogger
 from fundingpulse.testing.helpers.data_helpers import create_contract, get_or_create_section
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ExchangeContractListing, FundingPoint
 from fundingpulse.tracker.orchestration.contract_registry import (
+    ContractRegistryResult,
     FundingIntervalChange,
     ReconciliationPlan,
     _reconcile,
     register_contracts,
+    run_contract_registry,
 )
 from fundingpulse.tracker.orchestration.section_logger import make_section_logger
 
@@ -54,6 +57,66 @@ class _FakeRefresher:
 
     def signal_contracts_changed(self, exchange_name: str) -> None:
         self.signals.append(exchange_name)
+
+
+class _FailingRegistryExchange(_RegistryExchange):
+    async def get_contracts(self) -> list[ExchangeContractListing]:
+        raise RuntimeError("exchange unavailable")
+
+
+class _RecordedEvent:
+    def __init__(self, event: str, fields: dict[str, object]) -> None:
+        self.event = event
+        self.fields = fields
+
+
+class _RecordingEventLogger:
+    def __init__(self) -> None:
+        self.records: list[_RecordedEvent] = []
+
+    def bind(self, **fields: object) -> EventLogger:
+        return _BoundRecordingEventLogger(self, fields)
+
+    def info(self, event: str, **fields: object) -> object:
+        self.records.append(_RecordedEvent(event, fields))
+        return None
+
+    def debug(self, event: str, **fields: object) -> object:
+        return self.info(event, **fields)
+
+    def warning(self, event: str, **fields: object) -> object:
+        return self.info(event, **fields)
+
+    def error(self, event: str, **fields: object) -> object:
+        return self.info(event, **fields)
+
+    def exception(self, event: str, **fields: object) -> object:
+        return self.info(event, **fields)
+
+
+class _BoundRecordingEventLogger:
+    def __init__(self, parent: _RecordingEventLogger, fields: dict[str, object]) -> None:
+        self._parent = parent
+        self._fields = fields
+
+    def bind(self, **fields: object) -> EventLogger:
+        return _BoundRecordingEventLogger(self._parent, {**self._fields, **fields})
+
+    def info(self, event: str, **fields: object) -> object:
+        self._parent.records.append(_RecordedEvent(event, {**self._fields, **fields}))
+        return None
+
+    def debug(self, event: str, **fields: object) -> object:
+        return self.info(event, **fields)
+
+    def warning(self, event: str, **fields: object) -> object:
+        return self.info(event, **fields)
+
+    def error(self, event: str, **fields: object) -> object:
+        return self.info(event, **fields)
+
+    def exception(self, event: str, **fields: object) -> object:
+        return self.info(event, **fields)
 
 
 def _feed(
@@ -110,6 +173,10 @@ async def _load_contract(session: AsyncSession, asset_name: str) -> Contract:
         )
     )
     return result.scalar_one()
+
+
+def _event(logger: _RecordingEventLogger, name: str) -> _RecordedEvent:
+    return next(record for record in logger.records if record.event == name)
 
 
 def test_reconcile_new_feed_against_empty_db_produces_added() -> None:
@@ -301,3 +368,60 @@ async def test_register_noop_feed_does_not_signal_materialized_view_refresh(
     assert contract.deprecated is False
     assert contract.funding_interval == 8
     assert refresher.signals == []
+
+
+@pytest.mark.asyncio
+async def test_run_contract_registry_logs_completed_event_with_counts(
+    db_session: AsyncSession,
+    engine: AsyncEngine,
+) -> None:
+    await get_or_create_section(db_session, _SECTION)
+    event_logger = _RecordingEventLogger()
+    refresher = _FakeRefresher()
+
+    result = await run_contract_registry(
+        adapter=_RegistryExchange([_feed("BTC"), _feed("ETH", quote_name="USDC")]),
+        section_name=_SECTION,
+        db=_session_factory(engine),
+        mv_refresher=refresher,
+        event_logger=event_logger,
+    )
+
+    completed = _event(event_logger, "contract_registry_completed")
+    assert result == ContractRegistryResult(
+        feed_contracts=2,
+        added_contracts=2,
+        deprecated_contracts=0,
+        reactivated_contracts=0,
+        interval_changes=0,
+        mv_refresh_signaled=True,
+    )
+    assert completed.fields["exchange"] == _SECTION
+    assert completed.fields["feed_contracts"] == 2
+    assert completed.fields["added_contracts"] == 2
+    assert completed.fields["mv_refresh_signaled"] is True
+    assert isinstance(completed.fields["duration_seconds"], float)
+    assert refresher.signals == [_SECTION]
+
+
+@pytest.mark.asyncio
+async def test_run_contract_registry_logs_failed_event_and_swallows_error(
+    engine: AsyncEngine,
+) -> None:
+    event_logger = _RecordingEventLogger()
+
+    result = await run_contract_registry(
+        adapter=_FailingRegistryExchange([]),
+        section_name=_SECTION,
+        db=_session_factory(engine),
+        mv_refresher=_FakeRefresher(),
+        event_logger=event_logger,
+    )
+
+    failed = _event(event_logger, "contract_registry_failed")
+    assert result == ContractRegistryResult()
+    assert failed.fields["exchange"] == _SECTION
+    assert failed.fields["feed_contracts"] == 0
+    assert failed.fields["error_type"] == "RuntimeError"
+    assert failed.fields["error_message"] == "exchange unavailable"
+    assert isinstance(failed.fields["duration_seconds"], float)
