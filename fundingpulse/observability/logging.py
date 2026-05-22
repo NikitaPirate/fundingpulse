@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from typing import Protocol, TextIO, cast
 
 import structlog
@@ -42,6 +42,7 @@ def configure_json_logging(
     level: int = logging.INFO,
     stream: TextIO | None = None,
     runtime_fields: Mapping[str, object] | None = None,
+    domain_events: Collection[str] | None = None,
 ) -> None:
     """Configure stdlib and structlog to emit JSON application logs."""
     runtime_context = _add_runtime_context(
@@ -49,6 +50,7 @@ def configure_json_logging(
         component=component,
         runtime_fields=runtime_fields,
     )
+    domain_event_context = _add_domain_event(domain_events)
     shared_processors: list[Processor] = [
         structlog.contextvars.merge_contextvars,
         structlog.stdlib.add_logger_name,
@@ -73,6 +75,7 @@ def configure_json_logging(
         foreign_pre_chain=shared_processors,
         processors=[
             runtime_context,
+            domain_event_context,
             # Runtime log timestamps are emitted in UTC, matching the rest of the application.
             structlog.processors.TimeStamper(fmt="iso", utc=True),
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
@@ -107,3 +110,24 @@ def _add_runtime_context(
         return event_dict
 
     return add_runtime_context
+
+
+def _add_domain_event(domain_events: Collection[str] | None = None) -> Processor:
+    allowed_events = frozenset(domain_events or ())
+
+    def add_domain_event(
+        logger: WrappedLogger,
+        method_name: str,
+        event_dict: EventDict,
+    ) -> EventDict:
+        del logger, method_name
+        event_dict.pop("domain_event", None)
+        if "workflow" not in event_dict:
+            return event_dict
+
+        event = event_dict.get("event")
+        if isinstance(event, str) and event in allowed_events:
+            event_dict["domain_event"] = event
+        return event_dict
+
+    return add_domain_event

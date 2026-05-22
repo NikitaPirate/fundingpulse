@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from fundingpulse.observability.logging import configure_json_logging
+from fundingpulse.tracker.observability import TRACKER_DOMAIN_EVENTS
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +22,7 @@ def configure_logging(instance_id: int, total_instances: int) -> None:
         component="tracker",
         level=logging.INFO,
         runtime_fields=runtime_fields,
+        domain_events=TRACKER_DOMAIN_EVENTS,
     )
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("apscheduler").setLevel(logging.WARNING)

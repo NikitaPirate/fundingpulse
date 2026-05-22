@@ -25,6 +25,7 @@ from fundingpulse.models.quote import Quote
 from fundingpulse.observability.logging import EventLogger, get_logger
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.exchanges.dto import ExchangeContractListing
+from fundingpulse.tracker.observability import DomainEvents, Workflows
 from fundingpulse.tracker.orchestration.section_logger import SectionLogger, make_section_logger
 from fundingpulse.tracker.queries import contract_history_state
 from fundingpulse.tracker.queries import contracts as contract_queries
@@ -76,11 +77,14 @@ async def run_contract_registry(
     event_logger: EventLogger | None = None,
 ) -> ContractRegistryResult:
     """Scheduler-facing contract registry job with structured observability."""
-    log = (event_logger or _event_logger).bind(exchange=section_name)
+    log = (event_logger or _event_logger).bind(
+        workflow=Workflows.REGISTRY,
+        exchange=section_name,
+    )
     section_logger = make_section_logger(__name__, section_name)
     started_at = monotonic()
 
-    log.info("contract_registry_started")
+    log.info(DomainEvents.CONTRACT_REGISTRY_STARTED)
 
     try:
         result = await register_contracts(
@@ -93,7 +97,7 @@ async def run_contract_registry(
     except Exception as exc:
         result = ContractRegistryResult()
         log.exception(
-            "contract_registry_failed",
+            DomainEvents.CONTRACT_REGISTRY_FAILED,
             **_result_fields(result),
             duration_seconds=monotonic() - started_at,
             error_type=type(exc).__name__,
@@ -103,7 +107,7 @@ async def run_contract_registry(
         return result
 
     log.info(
-        "contract_registry_completed",
+        DomainEvents.CONTRACT_REGISTRY_COMPLETED,
         **_result_fields(result),
         duration_seconds=monotonic() - started_at,
     )

@@ -396,6 +396,7 @@ async def test_run_contract_registry_logs_completed_event_with_counts(
         interval_changes=0,
         mv_refresh_signaled=True,
     )
+    assert completed.fields["workflow"] == "registry"
     assert completed.fields["exchange"] == _SECTION
     assert completed.fields["feed_contracts"] == 2
     assert completed.fields["added_contracts"] == 2
@@ -420,6 +421,7 @@ async def test_run_contract_registry_logs_failed_event_and_swallows_error(
 
     failed = _event(event_logger, "contract_registry_failed")
     assert result == ContractRegistryResult()
+    assert failed.fields["workflow"] == "registry"
     assert failed.fields["exchange"] == _SECTION
     assert failed.fields["feed_contracts"] == 0
     assert failed.fields["error_type"] == "RuntimeError"

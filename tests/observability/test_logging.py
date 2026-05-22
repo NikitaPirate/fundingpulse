@@ -71,6 +71,84 @@ def test_bound_context_is_rendered_as_top_level_fields(
     assert payload["component"] == "scheduler"
 
 
+def test_workflow_event_is_exposed_as_domain_event_label_source(
+    restore_logging: None,
+) -> None:
+    del restore_logging
+    stream = io.StringIO()
+    configure_json_logging(
+        service="tracker",
+        component="tracker",
+        stream=stream,
+        domain_events={"live_collection_completed"},
+    )
+
+    get_logger("fundingpulse.tracker.orchestration.live_collector").bind(
+        workflow="live",
+        exchange="bybit",
+    ).info("live_collection_completed")
+
+    payload = _last_payload(stream)
+    assert payload["event"] == "live_collection_completed"
+    assert payload["domain_event"] == "live_collection_completed"
+    assert payload["workflow"] == "live"
+    assert payload["exchange"] == "bybit"
+
+
+def test_workflow_message_outside_domain_event_set_is_not_exposed_as_domain_event(
+    restore_logging: None,
+) -> None:
+    del restore_logging
+    stream = io.StringIO()
+    configure_json_logging(service="tracker", component="tracker", stream=stream)
+
+    get_logger("fundingpulse.tracker.orchestration.live_collector").bind(
+        workflow="live",
+        exchange="bybit",
+    ).info("starting live funding scheduler")
+
+    payload = _last_payload(stream)
+    assert payload["event"] == "starting live funding scheduler"
+    assert payload["workflow"] == "live"
+    assert "domain_event" not in payload
+
+
+def test_domain_event_is_derived_from_event_not_manual_field(
+    restore_logging: None,
+) -> None:
+    del restore_logging
+    stream = io.StringIO()
+    configure_json_logging(
+        service="tracker",
+        component="tracker",
+        stream=stream,
+        domain_events={"live_collection_completed"},
+    )
+
+    get_logger("fundingpulse.tracker.orchestration.live_collector").bind(
+        workflow="live",
+        exchange="bybit",
+    ).info("starting live funding scheduler", domain_event="live_collection_completed")
+
+    payload = _last_payload(stream)
+    assert payload["event"] == "starting live funding scheduler"
+    assert "domain_event" not in payload
+
+
+def test_non_workflow_event_is_not_exposed_as_domain_event(
+    restore_logging: None,
+) -> None:
+    del restore_logging
+    stream = io.StringIO()
+    configure_json_logging(service="tracker", component="tracker", stream=stream)
+
+    get_logger("fundingpulse.tracker.main").info("tracker_started")
+
+    payload = _last_payload(stream)
+    assert payload["event"] == "tracker_started"
+    assert "domain_event" not in payload
+
+
 def test_runtime_fields_are_rendered_as_top_level_fields(
     restore_logging: None,
 ) -> None:
@@ -108,6 +186,7 @@ def test_configure_json_logging_renders_stdlib_logs_as_json(
     assert payload["component"] == "scheduler"
     assert payload["level"] == "warning"
     assert payload["logger"] == "apscheduler"
+    assert "domain_event" not in payload
 
 
 def test_configure_json_logging_renders_exception(

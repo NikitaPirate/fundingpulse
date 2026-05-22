@@ -19,6 +19,7 @@ from fundingpulse.db import SessionFactory
 from fundingpulse.models.live_funding_point import LiveFundingPoint
 from fundingpulse.observability.logging import EventLogger, get_logger
 from fundingpulse.tracker.exchanges.base import BaseExchange
+from fundingpulse.tracker.observability import DomainEvents, Workflows
 from fundingpulse.tracker.queries.contracts import get_active_by_section
 from fundingpulse.tracker.queries.live_funding_points import insert_live_funding_points
 
@@ -42,13 +43,13 @@ async def collect_live(
     event_logger: EventLogger | None = None,
 ) -> LiveCollectionResult:
     """Fetch live rates for all active contracts and persist the snapshot."""
-    log = (event_logger or logger).bind(exchange=section_name)
+    log = (event_logger or logger).bind(workflow=Workflows.LIVE, exchange=section_name)
     started_at = monotonic()
     expected_contracts = 0
     received_rates = 0
     written_points = 0
 
-    log.info("live_collection_started")
+    log.info(DomainEvents.LIVE_COLLECTION_STARTED)
 
     try:
         async with db() as session:
@@ -61,7 +62,7 @@ async def collect_live(
                 written_points=0,
             )
             log.info(
-                "live_collection_completed",
+                DomainEvents.LIVE_COLLECTION_COMPLETED,
                 expected_contracts=result.expected_contracts,
                 received_rates=result.received_rates,
                 written_points=result.written_points,
@@ -69,12 +70,12 @@ async def collect_live(
             )
             return result
 
-        log.info("live_fetch_started", expected_contracts=expected_contracts)
+        log.info(DomainEvents.LIVE_FETCH_STARTED, expected_contracts=expected_contracts)
         fetch_started_at = monotonic()
         rates = await adapter.fetch_live(contracts)
         received_rates = len(rates)
         log.info(
-            "live_fetch_completed",
+            DomainEvents.LIVE_FETCH_COMPLETED,
             expected_contracts=expected_contracts,
             received_rates=received_rates,
             fetch_duration_seconds=monotonic() - fetch_started_at,
@@ -94,7 +95,7 @@ async def collect_live(
             written_points = await insert_live_funding_points(session, records)
 
         log.info(
-            "live_persist_completed",
+            DomainEvents.LIVE_PERSIST_COMPLETED,
             expected_contracts=expected_contracts,
             received_rates=received_rates,
             attempted_points=len(records),
@@ -108,7 +109,7 @@ async def collect_live(
             written_points=written_points,
         )
         log.info(
-            "live_collection_completed",
+            DomainEvents.LIVE_COLLECTION_COMPLETED,
             expected_contracts=result.expected_contracts,
             received_rates=result.received_rates,
             written_points=result.written_points,
@@ -117,7 +118,7 @@ async def collect_live(
         return result
     except Exception as exc:
         log.exception(
-            "live_collection_failed",
+            DomainEvents.LIVE_COLLECTION_FAILED,
             expected_contracts=expected_contracts,
             received_rates=received_rates,
             written_points=written_points,

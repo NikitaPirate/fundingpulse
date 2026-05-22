@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Collection
 
 import pytest
 
 from fundingpulse.tracker import logging_setup
+from fundingpulse.tracker.observability import TRACKER_DOMAIN_EVENTS
 
 
 def test_configure_logging_sets_tracker_service_and_component(
@@ -18,6 +20,7 @@ def test_configure_logging_sets_tracker_service_and_component(
         component: str,
         level: int,
         runtime_fields: dict[str, object] | None,
+        domain_events: Collection[str],
     ) -> None:
         calls.append(
             {
@@ -25,6 +28,7 @@ def test_configure_logging_sets_tracker_service_and_component(
                 "component": component,
                 "level": level,
                 "runtime_fields": runtime_fields,
+                "domain_events": domain_events,
             }
         )
 
@@ -38,6 +42,7 @@ def test_configure_logging_sets_tracker_service_and_component(
             "component": "tracker",
             "level": logging.INFO,
             "runtime_fields": None,
+            "domain_events": TRACKER_DOMAIN_EVENTS,
         }
     ]
 
@@ -53,6 +58,7 @@ def test_configure_logging_sets_tracker_instance_runtime_fields(
         component: str,
         level: int,
         runtime_fields: dict[str, object] | None,
+        domain_events: Collection[str],
     ) -> None:
         calls.append(
             {
@@ -60,6 +66,7 @@ def test_configure_logging_sets_tracker_instance_runtime_fields(
                 "component": component,
                 "level": level,
                 "runtime_fields": runtime_fields,
+                "domain_events": domain_events,
             }
         )
 
@@ -73,6 +80,7 @@ def test_configure_logging_sets_tracker_instance_runtime_fields(
             "component": "tracker",
             "level": logging.INFO,
             "runtime_fields": {"instance_id": 2, "total_instances": 4},
+            "domain_events": TRACKER_DOMAIN_EVENTS,
         }
     ]
 
@@ -86,8 +94,9 @@ def test_configure_logging_keeps_noisy_loggers_at_warning(
         component: str,
         level: int,
         runtime_fields: dict[str, object] | None,
+        domain_events: Collection[str],
     ) -> None:
-        return None
+        del service, component, level, runtime_fields, domain_events
 
     monkeypatch.setattr(logging_setup, "configure_json_logging", configure_json_logging)
     logging.getLogger("httpx").setLevel(logging.DEBUG)

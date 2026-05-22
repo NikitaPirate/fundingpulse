@@ -157,6 +157,7 @@ async def test_collect_live_succeeds_without_active_contracts(
     assert adapter.calls == []
     assert await _live_points(db_session) == []
     completed = _event(event_logger, "live_collection_completed")
+    assert completed.fields["workflow"] == "live"
     assert completed.fields["exchange"] == "bybit"
     assert completed.fields["expected_contracts"] == 0
     assert completed.fields["received_rates"] == 0
@@ -217,6 +218,7 @@ async def test_collect_live_writes_partial_adapter_response_and_logs_counts(
         (btc.id, point_time, 0.001),
     ]
     assert fetch_record.fields["exchange"] == "bybit"
+    assert fetch_record.fields["workflow"] == "live"
     assert fetch_record.fields["expected_contracts"] == 2
     assert fetch_record.fields["received_rates"] == 1
     assert isinstance(fetch_record.fields["fetch_duration_seconds"], float)
@@ -295,6 +297,7 @@ async def test_collect_live_swallows_adapter_failure_and_logs_failed_event(
         written_points=0,
     )
     failed = _event(event_logger, "live_collection_failed")
+    assert failed.fields["workflow"] == "live"
     assert failed.fields["exchange"] == "bybit"
     assert failed.fields["expected_contracts"] == 1
     assert failed.fields["received_rates"] == 0

@@ -17,24 +17,8 @@ discovery.relabel "fundingpulse_tracker_logs" {
   }
 
   rule {
-    source_labels = ["__meta_docker_container_name"]
-    regex         = "/(.*)"
-    target_label  = "container"
-  }
-
-  rule {
-    source_labels = ["__meta_docker_container_label_com_docker_compose_project"]
-    target_label  = "compose_project"
-  }
-
-  rule {
-    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
-    target_label  = "compose_service"
-  }
-
-  rule {
-    target_label = "job"
-    replacement  = "fundingpulse/tracker"
+    target_label = "service"
+    replacement  = "tracker"
   }
 }
 
@@ -49,19 +33,32 @@ loki.process "fundingpulse_tracker_logs" {
 
   stage.json {
     expressions = {
-      service   = "",
-      component = "",
-      level     = "",
-      exchange  = "",
+      workflow        = "",
+      domain_event    = "",
+      level           = "",
+      exchange        = "",
+      instance_id     = "",
+      logger          = "",
+      component       = "",
+      total_instances = "",
     }
   }
 
   stage.labels {
     values = {
-      service   = "",
-      component = "",
-      level     = "",
-      exchange  = "",
+      workflow    = "",
+      event       = "domain_event",
+      level       = "",
+      exchange    = "",
+      instance_id = "",
+    }
+  }
+
+  stage.structured_metadata {
+    values = {
+      logger          = "",
+      component       = "",
+      total_instances = "",
     }
   }
 
