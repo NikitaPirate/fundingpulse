@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.combining import OrTrigger
@@ -137,7 +138,7 @@ def _register_exchange_jobs(
     session_factory: SessionFactory,
     concurrency_limit: int,
 ) -> None:
-    """Register update and live jobs for each exchange."""
+    """Register history update, legacy update, and live jobs for each exchange."""
     if not exchange_names:
         logger.info("No exchange jobs to register")
         return
@@ -154,9 +155,31 @@ def _register_exchange_jobs(
             section_name=exchange_name,
             db=session_factory,
         )
+        _register_history_update_job(scheduler, exchange_name, orchestrator)
         _register_update_job(scheduler, exchange_name, orchestrator)
         second = index * seconds_per_exchange
         _register_live_job(scheduler, exchange_name, second, orchestrator)
+
+
+def _register_history_update_job(
+    scheduler: AsyncIOScheduler,
+    exchange_name: str,
+    orchestrator: ExchangeOrchestrator,
+) -> None:
+    scheduler.add_job(
+        orchestrator.update_history,
+        trigger=OrTrigger(
+            [
+                DateTrigger(run_date=utc_now(), timezone=UTC),
+                CronTrigger(hour="*", minute=0, second=5, timezone=UTC),
+            ]
+        ),
+        name=f"{exchange_name}_history_update",
+    )
+    logger.info(
+        "Registered history update job for %s (immediate + hourly at :00:05)",
+        exchange_name,
+    )
 
 
 def _register_update_job(
@@ -164,17 +187,24 @@ def _register_update_job(
     exchange_name: str,
     orchestrator: ExchangeOrchestrator,
 ) -> None:
+    delayed_start = utc_now() + timedelta(minutes=5)
     scheduler.add_job(
         orchestrator.update,
         trigger=OrTrigger(
             [
-                DateTrigger(run_date=utc_now(), timezone=UTC),
-                CronTrigger(hour="*", minute=0, second=5, timezone=UTC),
+                DateTrigger(run_date=delayed_start, timezone=UTC),
+                CronTrigger(
+                    hour="*",
+                    minute=5,
+                    second=0,
+                    start_date=delayed_start,
+                    timezone=UTC,
+                ),
             ]
         ),
         name=f"{exchange_name}_update",
     )
-    logger.info("Registered update job for %s (immediate + hourly)", exchange_name)
+    logger.info("Registered update job for %s (startup +5m + hourly at :05:00)", exchange_name)
 
 
 def _register_live_job(

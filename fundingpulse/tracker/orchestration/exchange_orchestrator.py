@@ -1,4 +1,4 @@
-"""Per-exchange coordinator: two scheduler-facing methods that delegate."""
+"""Per-exchange coordinator: scheduler-facing methods that delegate."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from fundingpulse.db import SessionFactory
 from fundingpulse.time import utc_now
 from fundingpulse.tracker.orchestration.history_sync import run_history_updates
+from fundingpulse.tracker.orchestration.history_update import run_history_update
 from fundingpulse.tracker.orchestration.live_collector import collect_live
 from fundingpulse.tracker.orchestration.section_logger import make_section_logger
 
@@ -17,9 +18,10 @@ if TYPE_CHECKING:
 class ExchangeOrchestrator:
     """Scheduler-facing facade for one exchange.
 
-    `update()` handles history backfill/update; `update_live()` is a separate
-    concern with its own cadence. All real work lives in the sibling modules —
-    this class only bundles dependencies and logs duration.
+    `update()` preserves the legacy history backfill/update workflow;
+    `update_history()` is the dedicated incremental history workflow;
+    `update_live()` snapshots unsettled rates. All real work lives in the
+    sibling modules — this class only bundles dependencies.
     """
 
     def __init__(
@@ -51,6 +53,14 @@ class ExchangeOrchestrator:
             stats.contracts_total,
             stats.points_fetched,
             duration,
+        )
+
+    async def update_history(self) -> None:
+        """Incrementally update settled history for each active contract."""
+        await run_history_update(
+            adapter=self._adapter,
+            section_name=self._section_name,
+            db=self._db,
         )
 
     async def update_live(self) -> None:

@@ -15,20 +15,28 @@ The tracker treats those cases as normal operating conditions.
 flowchart TD
     Start["Scheduler cycle"]
     Registry["Contract registry<br/>instance 0, every 5 minutes"]
-    ForEach["Process active contracts"]
+    HistoryUpdate["History update<br/>immediate + hourly :00:05"]
+    LegacyUpdate["Legacy sync/update<br/>startup +5m + hourly :05:00"]
+    ForEachUpdate["Process active contracts"]
+    ForEachLegacy["Process active contracts"]
     State{"History synced?"}
     Sync["Backfill history<br/>backward pagination"]
     UpdateGate{"Funding interval elapsed?"}
     Update["Incremental update<br/>fetch after newest point"]
+    LegacyUpdateGate{"Funding interval elapsed?"}
+    LegacyIncremental["Legacy incremental update"]
     Skip["Skip until next interval"]
     Live["Live collection<br/>every minute"]
 
     Start --> Registry
-    Start --> ForEach --> State
-    State -- "no" --> Sync
-    State -- "yes" --> UpdateGate
+    Start --> HistoryUpdate --> ForEachUpdate --> UpdateGate
     UpdateGate -- "yes" --> Update
     UpdateGate -- "no" --> Skip
+    Start --> LegacyUpdate --> ForEachLegacy --> State
+    State -- "no" --> Sync
+    State -- "yes" --> LegacyUpdateGate
+    LegacyUpdateGate -- "yes" --> LegacyIncremental
+    LegacyUpdateGate -- "no" --> Skip
     Start --> Live
 ```
 
@@ -71,15 +79,21 @@ Live collection and history sync read the shared database state. If registry has
 not populated a section yet, those jobs skip empty contract sets and pick them up
 on a later run.
 
-## Historical Sync
+## Historical Update And Sync
 
-Historical funding has two modes:
+Historical funding currently has a dedicated incremental workflow plus the
+legacy combined sync/update workflow:
 
-- **Backfill** for contracts whose full history is not yet synced. The tracker
+- **History update** runs on startup and hourly at `:00:05`. It fetches points
+  after `newest_timestamp + 1s`. If a contract has no stored history yet, it
+  fetches after `start_of_hour(now) - 1s`.
+- **Backfill** remains in the legacy `update` workflow for contracts whose full
+  history is not yet synced. The tracker
   paginates backward from the newest known point until the exchange returns no
   older data.
-- **Incremental update** for synced contracts. The tracker fetches points after
-  the newest committed timestamp, gated by the contract funding interval.
+- **Legacy incremental update** is still present in `update` until backfill is
+  split out. The legacy job runs startup +5 minutes and then hourly at `:05:00`,
+  so a fresh successful `history_update` normally makes this path skip API calls.
 
 Progress is stored in `ContractHistoryState`, one row per contract:
 
@@ -106,8 +120,9 @@ The tracker assumes interruption can happen at any point:
 | Crash point | Next run behavior |
 | --- | --- |
 | Contract registration | Fetches contracts again and reconciles idempotently |
+| History update | Fetches from the last committed `newest_timestamp`, or from current-hour start for empty history |
 | Historical backfill | Uses `oldest_timestamp` and repeats the last safe window |
-| Incremental update | Fetches from the last committed `newest_timestamp` |
+| Legacy incremental update | Fetches from the last committed `newest_timestamp` |
 | Live collection | Waits for the next minute and writes a new snapshot |
 
 Funding points use `(contract_id, timestamp)` as the identity. Bulk inserts
