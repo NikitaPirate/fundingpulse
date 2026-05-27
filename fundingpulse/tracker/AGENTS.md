@@ -6,12 +6,12 @@ Scheduler-based service that collects funding rates from crypto exchanges into T
 
 ```
 main.py → DB runtime scope → bootstrap.py → ExchangeOrchestrator (per exchange)
+                              ├── backfill_history()
+                              │   — startup +5m + hourly :05:00
+                              │   └── history_backfill.run_history_backfill — historical backfill
                               ├── update_history()
                               │   — immediate + hourly :00:05
                               │   └── history_update.run_history_update     — incremental history
-                              ├── update()
-                              │   — startup +5m + hourly :05:00
-                              │   └── history_sync.run_history_updates      — legacy sync/update
                               └── update_live()
                                   — every minute, snapshot current unsettled rates
                                   └── live_collector.collect_live
@@ -25,15 +25,22 @@ main.py → DB runtime scope → bootstrap.py → ExchangeOrchestrator (per exch
 
 **main.py** — owns the top-level DB runtime scope and shared HTTP client, then hands a ready `SessionFactory` to bootstrap.
 
-**bootstrap.py** — wires everything: resolves exchanges, seeds the `section` rows once, creates APScheduler, registers jobs around the provided `SessionFactory`. Each collection exchange gets `{exchange}_history_update` (immediate + hourly at :00:05), legacy `{exchange}_update` (startup +5m + hourly at :05:00), and `{exchange}_live` (minute cadence, staggered by second across exchanges). Instance 0 also registers `{exchange}_contract_registry` for every selected exchange plus singleton service jobs.
+**bootstrap.py** — wires everything: resolves exchanges, seeds the `section` rows once, creates APScheduler, registers jobs around the provided `SessionFactory`. Each collection exchange gets `{exchange}_history_backfill` (startup +5m + hourly at :05:00), `{exchange}_history_update` (immediate + hourly at :00:05), and `{exchange}_live` (minute cadence, staggered by second across exchanges). Instance 0 also registers `{exchange}_contract_registry` for every selected exchange plus singleton service jobs.
 
 **orchestration/** — siblings that split the per-exchange workflow:
-- `exchange_orchestrator.py` — thin facade with `update_history()` / `update()` / `update_live()` scheduler entry points. Bundles dependencies (adapter, DB, logger) and delegates to the modules below.
+- `exchange_orchestrator.py` — thin facade with `backfill_history()` / `update_history()` / `update_live()` scheduler entry points. Bundles dependencies (adapter, DB) and delegates to the modules below.
 - `contract_registry.py` — `run_contract_registry()` scheduler wrapper and `register_contracts()` reconciliation core. Fetches exchange contracts, ensures assets/quotes, computes an explicit reconciliation plan (`added`, `deprecated`, `reactivated`, `interval_changes`) from ORM `Contract` rows, applies rare lifecycle changes through ORM mutation inside the session, creates history-state rows, emits structured registry events, and signals the MV refresher only when contracts changed.
+- `history_backfill.py` — `run_history_backfill()`: structured, scheduler-facing historical backfill workflow. Loads only active unsynced `ContractWithHistoryState` projections, walks them backward with `fetch_history_before()`, persists each batch with state bounds in one transaction, marks `history_synced` only once older history is exhausted, and emits structured events. Whole-job timeout is 59 min.
 - `history_update.py` — `run_history_update()`: structured, scheduler-facing incremental history workflow. Loads active `ContractWithHistoryState` projections, fetches after `newest_timestamp + 1s` or `start_of_hour(now) - 1s` when no history exists, persists points and state bounds in one transaction, and emits structured events. Whole-job timeout is 59 min.
-- `history_sync.py` — `run_history_updates()` / `process_contracts()`: legacy combined workflow kept while backfill is being split out. It runs a per-contract task that either backfills (`_sync`, backward pagination until empty) or incrementally extends (`_update`, forward fetch gated by `funding_interval`). Both paths persist via `persist_batch()`, which relies on `update_bounds`' SQL-level `LEAST`/`GREATEST` merge. Sync timeout is 10 min, update is 1 min.
+- `historical_persistence.py` — shared historical point persistence helper. Inserts settled funding points idempotently and merges `ContractHistoryState` bounds in the same transaction.
 - `live_collector.py` — `collect_live()`: fetches live rates, inserts a snapshot, returns `LiveCollectionResult`, and emits structured events with fetch/persist counts and durations. Errors are logged and swallowed (minute cadence must not stall).
 - `section_logger.py` — `LoggerAdapter` that prepends `[section]` to every record; centralises the prefix that was duplicated across the layer.
+
+History backfill and history update intentionally keep separate workflow code.
+They look similar because the domain operations are adjacent, not because they
+share a stable abstraction. Share concrete mechanics such as historical point
+persistence; do not introduce a common scheduler/workflow runner unless the
+domain policies actually converge.
 
 **MaterializedViewRefresher** — debounced (10s default) refresh of `contract_enriched` materialized view. Triggered when contracts change, checked every second by the instance-0 singleton scheduler.
 

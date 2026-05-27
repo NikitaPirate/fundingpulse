@@ -15,6 +15,7 @@ from fundingpulse.testing.helpers.data_helpers import (
 from fundingpulse.time import utc_now
 from fundingpulse.tracker.queries.contracts import (
     get_active_by_section,
+    get_contracts_pending_history_backfill_by_section,
     get_contracts_with_history_state_by_section,
 )
 
@@ -83,6 +84,57 @@ async def test_get_contracts_with_history_state_returns_active_section_rows_with
     assert state.history_synced is True
     assert state.oldest_timestamp == oldest
     assert state.newest_timestamp == newest
+
+
+@pytest.mark.asyncio
+async def test_get_contracts_pending_history_backfill_returns_only_active_unsynced_rows(
+    db_session: AsyncSession,
+) -> None:
+    section_name = "backfill_query_ex"
+    pending = await create_contract(
+        db_session,
+        asset_name="BTC",
+        section_name=section_name,
+        quote_name="USDT",
+        funding_interval=8,
+    )
+
+    synced = await create_contract(
+        db_session,
+        asset_name="ETH",
+        section_name=section_name,
+        quote_name="USDT",
+        funding_interval=8,
+    )
+    synced_state = await db_session.get(ContractHistoryState, synced.id)
+    assert synced_state is not None
+    synced_state.history_synced = True
+    synced_state.oldest_timestamp = utc_now() - timedelta(days=14)
+    synced_state.newest_timestamp = utc_now() - timedelta(hours=8)
+
+    deprecated = await create_contract(
+        db_session,
+        asset_name="SOL",
+        section_name=section_name,
+        quote_name="USDT",
+        funding_interval=8,
+    )
+    deprecated.deprecated = True
+
+    await create_contract(
+        db_session,
+        asset_name="XRP",
+        section_name="other_backfill_query_ex",
+        quote_name="USDT",
+        funding_interval=8,
+    )
+    await db_session.commit()
+
+    rows = list(await get_contracts_pending_history_backfill_by_section(db_session, section_name))
+
+    assert len(rows) == 1
+    assert rows[0].contract.id == pending.id
+    assert rows[0].state.history_synced is False
 
 
 @pytest.mark.asyncio

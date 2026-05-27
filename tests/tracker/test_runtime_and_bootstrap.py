@@ -225,13 +225,14 @@ async def test_bootstrap_registers_tracker_live_jobs(
     )
 
     jobs = {job.name for job in scheduler.get_jobs()}
+    assert "bybit_history_backfill" in jobs
     assert "bybit_history_update" in jobs
-    assert "bybit_update" in jobs
+    assert "bybit_update" not in jobs
     assert "bybit_live" in jobs
 
 
 @pytest.mark.asyncio
-async def test_bootstrap_registers_history_update_on_legacy_update_timing(
+async def test_bootstrap_registers_history_update_on_hourly_timing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def ensure_sections(_: SessionFactory, __: list[str]) -> None:
@@ -258,7 +259,7 @@ async def test_bootstrap_registers_history_update_on_legacy_update_timing(
 
 
 @pytest.mark.asyncio
-async def test_bootstrap_delays_legacy_update_by_five_minutes(
+async def test_bootstrap_delays_history_backfill_by_five_minutes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def ensure_sections(_: SessionFactory, __: list[str]) -> None:
@@ -274,7 +275,7 @@ async def test_bootstrap_delays_legacy_update_by_five_minutes(
         exchanges=["bybit"],
     )
 
-    job = next(job for job in scheduler.get_jobs() if job.name == "bybit_update")
+    job = next(job for job in scheduler.get_jobs() if job.name == "bybit_history_backfill")
     fire_times = _next_fire_times(job, started_at, count=3)
 
     assert fire_times == [
@@ -330,7 +331,7 @@ async def test_bootstrap_skips_singleton_jobs_for_non_owner_instance(
     )
 
     jobs = {job.name for job in scheduler.get_jobs()}
-    assert jobs == {"bybit_history_update", "bybit_update", "bybit_live"}
+    assert jobs == {"bybit_history_backfill", "bybit_history_update", "bybit_live"}
 
 
 @pytest.mark.asyncio

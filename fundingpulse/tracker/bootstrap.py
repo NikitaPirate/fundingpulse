@@ -138,7 +138,7 @@ def _register_exchange_jobs(
     session_factory: SessionFactory,
     concurrency_limit: int,
 ) -> None:
-    """Register history update, legacy update, and live jobs for each exchange."""
+    """Register history backfill, history update, and live jobs for each exchange."""
     if not exchange_names:
         logger.info("No exchange jobs to register")
         return
@@ -155,8 +155,8 @@ def _register_exchange_jobs(
             section_name=exchange_name,
             db=session_factory,
         )
+        _register_history_backfill_job(scheduler, exchange_name, orchestrator)
         _register_history_update_job(scheduler, exchange_name, orchestrator)
-        _register_update_job(scheduler, exchange_name, orchestrator)
         second = index * seconds_per_exchange
         _register_live_job(scheduler, exchange_name, second, orchestrator)
 
@@ -182,14 +182,14 @@ def _register_history_update_job(
     )
 
 
-def _register_update_job(
+def _register_history_backfill_job(
     scheduler: AsyncIOScheduler,
     exchange_name: str,
     orchestrator: ExchangeOrchestrator,
 ) -> None:
     delayed_start = utc_now() + timedelta(minutes=5)
     scheduler.add_job(
-        orchestrator.update,
+        orchestrator.backfill_history,
         trigger=OrTrigger(
             [
                 DateTrigger(run_date=delayed_start, timezone=UTC),
@@ -202,9 +202,12 @@ def _register_update_job(
                 ),
             ]
         ),
-        name=f"{exchange_name}_update",
+        name=f"{exchange_name}_history_backfill",
     )
-    logger.info("Registered update job for %s (startup +5m + hourly at :05:00)", exchange_name)
+    logger.info(
+        "Registered history backfill job for %s (startup +5m + hourly at :05:00)",
+        exchange_name,
+    )
 
 
 def _register_live_job(

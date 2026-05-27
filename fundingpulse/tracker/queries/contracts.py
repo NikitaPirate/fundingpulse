@@ -58,3 +58,28 @@ async def get_contracts_with_history_state_by_section(
         ContractWithHistoryState(contract=contract, state=state)
         for contract, state in result.all()
     ]
+
+
+async def get_contracts_pending_history_backfill_by_section(
+    session: AsyncSession, section_name: str
+) -> Sequence[ContractWithHistoryState]:
+    """Return active contracts whose full historical backfill is not complete.
+
+    Contracts without a ContractHistoryState row are intentionally skipped:
+    registry creates missing state rows, so the next tracker pass will pick
+    them up after that repair.
+    """
+    stmt = (
+        select(Contract, ContractHistoryState)
+        .join(ContractHistoryState, col(Contract.id) == col(ContractHistoryState.contract_id))
+        .where(
+            col(Contract.section_name) == section_name,
+            col(Contract.deprecated).is_(False),
+            col(ContractHistoryState.history_synced).is_(False),
+        )
+    )
+    result = await session.execute(stmt)
+    return [
+        ContractWithHistoryState(contract=contract, state=state)
+        for contract, state in result.all()
+    ]

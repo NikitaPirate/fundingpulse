@@ -1,16 +1,16 @@
-"""Incrementally collect settled historical funding points.
+"""Backfill settled historical funding points.
 
-This workflow is intentionally separate from historical backfill. It only moves
-the newest bound forward by asking the exchange for points after the last stored
-historical point, or from the start of the current hour for contracts with no
-stored history yet.
-
-The job owns a whole-run timeout. Per-contract failures are logged and isolated,
-while a stuck exchange call lets APScheduler try again on the next hourly run.
+This workflow is intentionally separate from incremental history updates. It
+only works on contracts whose full historical range is not synced yet, walking
+backward from the oldest stored point until the exchange returns no older data.
 
 History update and backfill deliberately keep separate orchestration code:
 their shapes currently match, but they encode different domain policies. Share
 mechanics such as persistence, not the workflow state machine.
+
+The job owns a whole-run timeout matching the hourly scheduler cadence. A stuck
+exchange call is cancelled before the next run, while per-contract failures are
+logged and isolated from the rest of the exchange.
 """
 
 from __future__ import annotations
@@ -19,96 +19,96 @@ import asyncio
 from dataclasses import dataclass
 from datetime import timedelta
 from time import monotonic
+from uuid import UUID
 
 from fundingpulse.db import SessionFactory
 from fundingpulse.models.contract import Contract
 from fundingpulse.models.contract_history_state import ContractHistoryState
 from fundingpulse.observability.logging import EventLogger, get_logger
-from fundingpulse.time import UtcDateTime, start_of_hour, to_iso8601, utc_now
+from fundingpulse.time import UtcDateTime, to_iso8601
 from fundingpulse.tracker.exchanges.base import BaseExchange
 from fundingpulse.tracker.observability import DomainEvents, Workflows
 from fundingpulse.tracker.orchestration.historical_persistence import (
     persist_historical_funding_batch,
 )
+from fundingpulse.tracker.queries import contract_history_state
 from fundingpulse.tracker.queries.contracts import (
     ContractWithHistoryState,
-    get_contracts_with_history_state_by_section,
+    get_contracts_pending_history_backfill_by_section,
 )
 
-HISTORY_UPDATE_TIMEOUT_SECONDS = 59 * 60
+HISTORY_BACKFILL_TIMEOUT_SECONDS = 59 * 60
 
 logger = get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
-class HistoryUpdateResult:
-    """Observable outcome of one incremental historical update."""
+class HistoryBackfillResult:
+    """Observable outcome of one historical backfill run."""
 
     contracts_total: int = 0
-    contracts_skipped: int = 0
     contracts_attempted: int = 0
-    contracts_updated: int = 0
+    contracts_backfilled: int = 0
     contracts_failed: int = 0
     points_fetched: int = 0
     points_written: int = 0
 
 
 @dataclass(frozen=True, slots=True)
-class _ContractUpdateResult:
+class _ContractBackfillResult:
     points_fetched: int = 0
     points_written: int = 0
+    backfilled: bool = False
     failed: bool = False
 
 
 @dataclass(slots=True)
-class _HistoryUpdateProgress:
+class _HistoryBackfillProgress:
     contracts_total: int = 0
-    contracts_skipped: int = 0
     contracts_attempted: int = 0
-    contracts_updated: int = 0
+    contracts_backfilled: int = 0
     contracts_failed: int = 0
     points_fetched: int = 0
     points_written: int = 0
 
-    def apply(self, result: _ContractUpdateResult) -> None:
-        self.contracts_updated += 1 if result.points_written > 0 else 0
+    def apply(self, result: _ContractBackfillResult) -> None:
+        self.contracts_backfilled += 1 if result.backfilled else 0
         self.contracts_failed += 1 if result.failed else 0
         self.points_fetched += result.points_fetched
         self.points_written += result.points_written
 
-    def snapshot(self) -> HistoryUpdateResult:
-        return HistoryUpdateResult(
+    def snapshot(self) -> HistoryBackfillResult:
+        return HistoryBackfillResult(
             contracts_total=self.contracts_total,
-            contracts_skipped=self.contracts_skipped,
             contracts_attempted=self.contracts_attempted,
-            contracts_updated=self.contracts_updated,
+            contracts_backfilled=self.contracts_backfilled,
             contracts_failed=self.contracts_failed,
             points_fetched=self.points_fetched,
             points_written=self.points_written,
         )
 
 
-async def run_history_update(
+async def run_history_backfill(
     *,
     adapter: BaseExchange,
     section_name: str,
     db: SessionFactory,
     event_logger: EventLogger | None = None,
-    timeout_seconds: float = HISTORY_UPDATE_TIMEOUT_SECONDS,
-) -> HistoryUpdateResult:
-    """Scheduler-facing incremental history update with structured observability."""
+    timeout_seconds: float = HISTORY_BACKFILL_TIMEOUT_SECONDS,
+) -> HistoryBackfillResult:
+    """Scheduler-facing historical backfill with structured observability."""
     log = (event_logger or logger).bind(
-        workflow=Workflows.HISTORY_UPDATE,
+        workflow=Workflows.HISTORY_BACKFILL,
         exchange=section_name,
     )
     started_at = monotonic()
-    progress = _HistoryUpdateProgress()
+    progress = _HistoryBackfillProgress()
 
-    log.info(DomainEvents.HISTORY_UPDATE_STARTED)
+    log.info(DomainEvents.HISTORY_BACKFILL_STARTED)
 
     try:
         async with asyncio.timeout(timeout_seconds):
-            result = await _update_contracts(
+            result = await _backfill_contracts(
                 adapter=adapter,
                 section_name=section_name,
                 db=db,
@@ -118,7 +118,7 @@ async def run_history_update(
     except TimeoutError as exc:
         result = progress.snapshot()
         log.exception(
-            DomainEvents.HISTORY_UPDATE_FAILED,
+            DomainEvents.HISTORY_BACKFILL_FAILED,
             **_result_fields(result),
             duration_seconds=monotonic() - started_at,
             timeout_seconds=timeout_seconds,
@@ -130,7 +130,7 @@ async def run_history_update(
     except Exception as exc:
         result = progress.snapshot()
         log.exception(
-            DomainEvents.HISTORY_UPDATE_FAILED,
+            DomainEvents.HISTORY_BACKFILL_FAILED,
             **_result_fields(result),
             duration_seconds=monotonic() - started_at,
             error_type=type(exc).__name__,
@@ -140,46 +140,40 @@ async def run_history_update(
         return result
 
     log.info(
-        DomainEvents.HISTORY_UPDATE_COMPLETED,
+        DomainEvents.HISTORY_BACKFILL_COMPLETED,
         **_result_fields(result),
         duration_seconds=monotonic() - started_at,
     )
     return result
 
 
-async def _update_contracts(
+async def _backfill_contracts(
     *,
     adapter: BaseExchange,
     section_name: str,
     db: SessionFactory,
     log: EventLogger,
-    progress: _HistoryUpdateProgress,
-) -> HistoryUpdateResult:
+    progress: _HistoryBackfillProgress,
+) -> HistoryBackfillResult:
     async with db() as session:
-        contracts_with_states = list(
-            await get_contracts_with_history_state_by_section(session, section_name)
+        pending_backfills = list(
+            await get_contracts_pending_history_backfill_by_section(session, section_name)
         )
 
-    if not contracts_with_states:
-        return HistoryUpdateResult()
+    if not pending_backfills:
+        return HistoryBackfillResult()
 
-    now = utc_now()
-    tasks: list[asyncio.Task[_ContractUpdateResult]] = []
-    progress.contracts_total = len(contracts_with_states)
+    tasks: list[asyncio.Task[_ContractBackfillResult]] = []
+    progress.contracts_total = len(pending_backfills)
 
-    for contract_with_state in contracts_with_states:
-        if _is_fresh(contract_with_state.contract, contract_with_state.state, now):
-            progress.contracts_skipped += 1
-            continue
-
+    for contract_with_state in pending_backfills:
         tasks.append(
             asyncio.create_task(
-                _update_one_contract(
+                _backfill_one_contract(
                     adapter=adapter,
                     contract_state=contract_with_state,
                     db=db,
                     log=log,
-                    now=now,
                 )
             )
         )
@@ -196,68 +190,103 @@ async def _update_contracts(
     return progress.snapshot()
 
 
-async def _update_one_contract(
+async def _backfill_one_contract(
     *,
     adapter: BaseExchange,
     contract_state: ContractWithHistoryState,
     db: SessionFactory,
     log: EventLogger,
-    now: UtcDateTime,
-) -> _ContractUpdateResult:
+) -> _ContractBackfillResult:
     contract = contract_state.contract
-    after_timestamp = _next_fetch_timestamp(contract_state.state, now)
+    state = contract_state.state
+    before_timestamp = _initial_before_timestamp(state)
 
     try:
-        points = await adapter.fetch_history_after(contract, after_timestamp)
-        if not points:
-            return _ContractUpdateResult()
-
-        batch = await persist_historical_funding_batch(db, contract.id, points)
-        return _ContractUpdateResult(
-            points_fetched=len(points),
-            points_written=batch.points_written,
+        return await _fetch_and_persist_backfill(
+            adapter=adapter,
+            contract=contract,
+            state=state,
+            db=db,
+            before_timestamp=before_timestamp,
         )
     except Exception as exc:
         log.exception(
-            DomainEvents.HISTORY_UPDATE_CONTRACT_FAILED,
+            DomainEvents.HISTORY_BACKFILL_CONTRACT_FAILED,
             contract_id=str(contract.id),
             asset=contract.asset_name,
             quote=contract.quote_name,
-            after_timestamp=to_iso8601(after_timestamp),
+            before_timestamp=_timestamp_field(before_timestamp),
             error_type=type(exc).__name__,
             error_message=str(exc),
             exc_info=exc,
         )
-        return _ContractUpdateResult(failed=True)
+        return _ContractBackfillResult(failed=True)
 
 
-def _is_fresh(
+async def _fetch_and_persist_backfill(
+    *,
+    adapter: BaseExchange,
     contract: Contract,
     state: ContractHistoryState,
-    now: UtcDateTime,
+    db: SessionFactory,
+    before_timestamp: UtcDateTime | None,
+) -> _ContractBackfillResult:
+    points_fetched = 0
+    points_written = 0
+    has_stored_history = state.oldest_timestamp is not None
+
+    while True:
+        points = await adapter.fetch_history_before(contract, before_timestamp)
+        if not points:
+            backfilled = await _mark_history_synced_if_ready(
+                db,
+                contract.id,
+                has_stored_history=has_stored_history,
+            )
+            return _ContractBackfillResult(
+                points_fetched=points_fetched,
+                points_written=points_written,
+                backfilled=backfilled,
+            )
+
+        batch = await persist_historical_funding_batch(db, contract.id, points)
+        points_fetched += len(points)
+        points_written += batch.points_written
+        has_stored_history = True
+        before_timestamp = batch.oldest_timestamp - timedelta(seconds=1)
+
+
+async def _mark_history_synced_if_ready(
+    db: SessionFactory,
+    contract_id: UUID,
+    *,
+    has_stored_history: bool,
 ) -> bool:
-    if state.newest_timestamp is None:
+    if not has_stored_history:
         return False
 
-    after_timestamp = state.newest_timestamp + timedelta(seconds=1)
-    return now - after_timestamp < timedelta(hours=contract.funding_interval)
+    async with db.begin() as session:
+        await contract_history_state.mark_history_synced(session, contract_id)
+    return True
 
 
-def _next_fetch_timestamp(
-    state: ContractHistoryState,
-    now: UtcDateTime,
-) -> UtcDateTime:
-    if state.newest_timestamp is None:
-        return start_of_hour(now) - timedelta(seconds=1)
-    return state.newest_timestamp + timedelta(seconds=1)
+def _initial_before_timestamp(state: ContractHistoryState) -> UtcDateTime | None:
+    if state.oldest_timestamp is None:
+        return None
+    return state.oldest_timestamp - timedelta(seconds=1)
 
 
-def _result_fields(result: HistoryUpdateResult) -> dict[str, object]:
+def _timestamp_field(value: UtcDateTime | None) -> str | None:
+    if value is None:
+        return None
+    return to_iso8601(value)
+
+
+def _result_fields(result: HistoryBackfillResult) -> dict[str, object]:
     return {
         "contracts_total": result.contracts_total,
-        "contracts_skipped": result.contracts_skipped,
         "contracts_attempted": result.contracts_attempted,
-        "contracts_updated": result.contracts_updated,
+        "contracts_backfilled": result.contracts_backfilled,
         "contracts_failed": result.contracts_failed,
         "points_fetched": result.points_fetched,
         "points_written": result.points_written,

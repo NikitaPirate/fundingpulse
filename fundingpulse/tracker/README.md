@@ -15,28 +15,24 @@ The tracker treats those cases as normal operating conditions.
 flowchart TD
     Start["Scheduler cycle"]
     Registry["Contract registry<br/>instance 0, every 5 minutes"]
+    HistoryBackfill["History backfill<br/>startup +5m + hourly :05:00"]
     HistoryUpdate["History update<br/>immediate + hourly :00:05"]
-    LegacyUpdate["Legacy sync/update<br/>startup +5m + hourly :05:00"]
+    PendingBackfills["Load active unsynced contracts"]
     ForEachUpdate["Process active contracts"]
-    ForEachLegacy["Process active contracts"]
-    State{"History synced?"}
     Sync["Backfill history<br/>backward pagination"]
     UpdateGate{"Funding interval elapsed?"}
     Update["Incremental update<br/>fetch after newest point"]
-    LegacyUpdateGate{"Funding interval elapsed?"}
-    LegacyIncremental["Legacy incremental update"]
-    Skip["Skip until next interval"]
+    NoBackfillWork["No backfill work"]
+    WaitForInterval["Wait until next interval"]
     Live["Live collection<br/>every minute"]
 
     Start --> Registry
+    Start --> HistoryBackfill --> PendingBackfills
+    PendingBackfills -- "some" --> Sync
+    PendingBackfills -- "none" --> NoBackfillWork
     Start --> HistoryUpdate --> ForEachUpdate --> UpdateGate
     UpdateGate -- "yes" --> Update
-    UpdateGate -- "no" --> Skip
-    Start --> LegacyUpdate --> ForEachLegacy --> State
-    State -- "no" --> Sync
-    State -- "yes" --> LegacyUpdateGate
-    LegacyUpdateGate -- "yes" --> LegacyIncremental
-    LegacyUpdateGate -- "no" --> Skip
+    UpdateGate -- "no" --> WaitForInterval
     Start --> Live
 ```
 
@@ -75,25 +71,27 @@ five minutes at minutes 4, 9, ..., 59. That list is reconciled with existing
 - reappeared contracts are reactivated;
 - funding interval changes are applied explicitly.
 
-Live collection and history sync read the shared database state. If registry has
-not populated a section yet, those jobs skip empty contract sets and pick them up
-on a later run.
+Live collection, history update, and history backfill read the shared database
+state. If registry has not populated a section yet, those jobs skip empty
+contract sets and pick them up on a later run.
 
-## Historical Update And Sync
+## Historical Update And Backfill
 
-Historical funding currently has a dedicated incremental workflow plus the
-legacy combined sync/update workflow:
+Historical funding has separate incremental update and backfill workflows:
 
 - **History update** runs on startup and hourly at `:00:05`. It fetches points
   after `newest_timestamp + 1s`. If a contract has no stored history yet, it
   fetches after `start_of_hour(now) - 1s`.
-- **Backfill** remains in the legacy `update` workflow for contracts whose full
-  history is not yet synced. The tracker
-  paginates backward from the newest known point until the exchange returns no
-  older data.
-- **Legacy incremental update** is still present in `update` until backfill is
-  split out. The legacy job runs startup +5 minutes and then hourly at `:05:00`,
-  so a fresh successful `history_update` normally makes this path skip API calls.
+- **History backfill** runs startup +5 minutes and then hourly at `:05:00`. It
+  queries only active contracts whose full history is not synced, then paginates
+  them backward from `oldest_timestamp - 1s` until the exchange returns no older
+  data.
+
+Backfill and update deliberately keep separate workflow code. They look similar
+because both move historical checkpoints, but they answer different policy
+questions: update asks whether new settlements are due, while backfill asks
+whether old history is complete. Shared code should stay limited to concrete
+mechanics such as idempotent point persistence and monotonic bound updates.
 
 Progress is stored in `ContractHistoryState`, one row per contract:
 
@@ -122,7 +120,6 @@ The tracker assumes interruption can happen at any point:
 | Contract registration | Fetches contracts again and reconciles idempotently |
 | History update | Fetches from the last committed `newest_timestamp`, or from current-hour start for empty history |
 | Historical backfill | Uses `oldest_timestamp` and repeats the last safe window |
-| Legacy incremental update | Fetches from the last committed `newest_timestamp` |
 | Live collection | Waits for the next minute and writes a new snapshot |
 
 Funding points use `(contract_id, timestamp)` as the identity. Bulk inserts

@@ -8,6 +8,7 @@ from enum import StrEnum
 class Workflows(StrEnum):
     """Stable tracker workflows exposed as observability labels."""
 
+    HISTORY_BACKFILL = "history_backfill"
     HISTORY_UPDATE = "history_update"
     LIVE = "live"
     REGISTRY = "registry"
@@ -19,6 +20,10 @@ class DomainEvents(StrEnum):
     CONTRACT_REGISTRY_STARTED = "contract_registry_started"
     CONTRACT_REGISTRY_COMPLETED = "contract_registry_completed"
     CONTRACT_REGISTRY_FAILED = "contract_registry_failed"
+    HISTORY_BACKFILL_STARTED = "history_backfill_started"
+    HISTORY_BACKFILL_COMPLETED = "history_backfill_completed"
+    HISTORY_BACKFILL_FAILED = "history_backfill_failed"
+    HISTORY_BACKFILL_CONTRACT_FAILED = "history_backfill_contract_failed"
     HISTORY_UPDATE_STARTED = "history_update_started"
     HISTORY_UPDATE_COMPLETED = "history_update_completed"
     HISTORY_UPDATE_FAILED = "history_update_failed"
